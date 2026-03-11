@@ -1,62 +1,18 @@
-from __future__ import annotations
-
 from pathlib import Path
 import pandas as pd
 
+# load processed returns matrix from CSV
+def load_returns_csv(path: str | Path) -> pd.DataFrame:
 
-def load_close_series(fp: Path) -> pd.Series:
-    """
-    Read one stock CSV and return a cleaned Close price series.
+    path = Path(path)
+    df = pd.read_csv(path, index_col=0, parse_dates=True)
+    df = df.sort_index()
 
-    Expected CSV columns:
-    - Date
-    - Close
+    # Basic validation
+    if df.empty:
+        raise ValueError(f"Loaded returns dataframe is empty: {path}")
 
-    Output:
-    - pd.Series
-        index: DatetimeIndex
-        values: float prices
-        name: ticker (file stem)
-    """
-    df = pd.read_csv(fp)
+    if df.isna().sum().sum() > 0:
+        raise ValueError(f"Returns dataframe contains NaN values: {path}")
 
-    required_cols = {"Date", "Close"}
-    missing = required_cols - set(df.columns)
-    if missing:
-        raise ValueError(
-            f"{fp.name}: missing required columns {missing}. "
-            f"Found columns: {list(df.columns)}"
-        )
-
-    # Parse and clean date
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df = df.dropna(subset=["Date"]).sort_values("Date")
-
-    # Parse and clean price
-    df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
-    df = df.dropna(subset=["Close"])
-
-    # Keep only positive prices
-    df = df[df["Close"] > 0]
-
-    # Remove duplicate dates, keep last occurrence
-    df = df.drop_duplicates(subset=["Date"], keep="last")
-
-    series = pd.Series(
-        data=df["Close"].values,
-        index=df["Date"],
-        name=fp.stem,
-        dtype="float64",
-    )
-
-    return series
-
-
-def list_csv_files(data_dir: Path) -> list[Path]:
-    """
-    List all CSV files in a directory, sorted by name.
-    """
-    files = sorted(data_dir.glob("*.csv"))
-    if not files:
-        raise FileNotFoundError(f"No CSV files found in: {data_dir}")
-    return files
+    return df
