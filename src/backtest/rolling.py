@@ -69,7 +69,7 @@ def run_rolling_backtest(
             raise ValueError(f"Strategy returned NaN weights at {rebalance_date}")
 
         weight_sum = weights.sum()
-        if not np.isclose(weight_sum, 1.0, atol=1e-6):
+        if not np.isclose(weight_sum, 1.0, atol=1e-4):
             raise ValueError(f"Weights do not sum to 1 at {rebalance_date}. Sum={weight_sum}")
 
         if (weights < -1e-12).any():

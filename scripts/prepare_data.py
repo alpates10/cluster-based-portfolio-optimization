@@ -29,7 +29,7 @@ def main():
     ESTIMATION_WINDOW_DAYS = 756
     COVERAGE_THRESHOLD = 0.95
     DROP_WORST_K_BY_RETURN_MISSING = 10
-    RETURN_TYPE = "log"
+    RETURN_TYPE = "simple"
 
     PROJECT_ROOT = Path(__file__).resolve().parents[1]
     RAW_DIR = PROJECT_ROOT / "data" / "raw" / "sp500_stocks"
