@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import sys
+from functools import partial
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -11,6 +12,10 @@ from src.optimizers.equal_weight import get_equal_weight
 from src.optimizers.mean_variance import get_mean_variance_weights
 from src.optimizers.gmv import get_gmv_weights
 from src.optimizers.cvar import get_cvar_weights
+from src.optimizers.cluster_equal_weight import (
+    get_cluster_kmeans_equal_weight,
+    get_cluster_kmedoids_dtw_equal_weight,
+)
 from src.backtest.rolling import run_rolling_backtest
 
 
@@ -24,12 +29,25 @@ def main():
 
     returns = load_returns_csv(returns_path)
 
+    global_k = 5
+
     strategies = {
         #"cvar": get_cvar_weights,
-        "equal_weight": get_equal_weight,
-        "mean_variance": get_mean_variance_weights,
-        "gmv": get_gmv_weights,
-        
+        #"equal_weight": get_equal_weight,
+        #"mean_variance": get_mean_variance_weights,
+        #"gmv": get_gmv_weights,
+        #"cluster_kmeans_equal_weight": partial(
+        #    get_cluster_kmeans_equal_weight,
+        #    global_k=global_k,
+        #    random_state=42,
+        #),
+        "cluster_kmedoids_dtw_equal_weight": partial(
+            get_cluster_kmedoids_dtw_equal_weight,
+            global_k=global_k,
+            random_state=42,
+            dtw_n_jobs=-1,
+            dtw_use_gpu=True,
+        ),
     }
 
     for strategy_name, strategy_func in strategies.items():
@@ -42,6 +60,10 @@ def main():
             returns=returns,
             strategy_func=strategy_func,
             estimation_window=756,
+            show_progress=(strategy_name == "cluster_kmedoids_dtw_equal_weight"),
+            progress_desc=strategy_name,
+            detailed_progress=(strategy_name == "cluster_kmedoids_dtw_equal_weight"),
+            heartbeat_seconds=30 if strategy_name == "cluster_kmedoids_dtw_equal_weight" else None,
         )
         
         monthly_portfolio_returns = (

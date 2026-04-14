@@ -1,5 +1,8 @@
 import pandas as pd
 import numpy as np
+from tqdm.auto import tqdm
+import threading
+import time
 
 # Generate monthly rebalance dates
 def get_monthly_rebalance_dates(returns: pd.DataFrame, estimation_window: int) -> list[pd.Timestamp]:
@@ -25,6 +28,10 @@ def run_rolling_backtest(
     returns: pd.DataFrame,
     strategy_func,
     estimation_window: int = 756,
+    show_progress: bool = False,
+    progress_desc: str | None = None,
+    detailed_progress: bool = False,
+    heartbeat_seconds: int | None = None,
 ) -> tuple[pd.Series, pd.DataFrame]:
     """
     Run a rolling monthly backtest.
@@ -37,6 +44,14 @@ def run_rolling_backtest(
         Function taking window_returns and returning pd.Series weights.
     estimation_window : int
         Number of past trading days used for estimation.
+    show_progress : bool
+        If True, show a progress bar over rebalance dates.
+    progress_desc : str | None
+        Optional label for progress bar.
+    detailed_progress : bool
+        If True, print detailed timing logs per rebalance.
+    heartbeat_seconds : int | None
+        If set, print periodic "still running" messages while strategy is computing.
 
     Returns
     -------
@@ -50,14 +65,63 @@ def run_rolling_backtest(
     portfolio_returns_list = []
     weights_records = []
 
-    for i, rebalance_date in enumerate(rebalance_dates):
+    rebalance_iter = rebalance_dates
+    progress_bar = None
+    if show_progress:
+        progress_bar = tqdm(
+            rebalance_dates,
+            desc=progress_desc or "Rolling Backtest",
+            unit="rebalance",
+        )
+        rebalance_iter = progress_bar
+
+    for i, rebalance_date in enumerate(rebalance_iter):
+        if progress_bar is not None:
+            progress_bar.set_postfix({"rebalance_date": rebalance_date.date().isoformat()})
+
         t = returns.index.get_loc(rebalance_date)
 
         # estimation window returns
         window_returns = returns.iloc[t - estimation_window:t]
 
         # find weights using the strategy function
-        weights = strategy_func(window_returns)
+        strategy_start = time.perf_counter()
+        if detailed_progress:
+            tqdm.write(
+                f"[{progress_desc or 'strategy'}] "
+                f"{i + 1}/{len(rebalance_dates)} {rebalance_date.date()} strategy calc started"
+            )
+
+        stop_event = None
+        heartbeat_thread = None
+        if heartbeat_seconds is not None and heartbeat_seconds > 0:
+            stop_event = threading.Event()
+
+            def _heartbeat() -> None:
+                while not stop_event.wait(heartbeat_seconds):
+                    elapsed = time.perf_counter() - strategy_start
+                    tqdm.write(
+                        f"[{progress_desc or 'strategy'}] "
+                        f"{rebalance_date.date()} still running ({elapsed:.1f}s)"
+                    )
+
+            heartbeat_thread = threading.Thread(target=_heartbeat, daemon=True)
+            heartbeat_thread.start()
+
+        try:
+            weights = strategy_func(window_returns)
+        finally:
+            if stop_event is not None:
+                stop_event.set()
+            if heartbeat_thread is not None:
+                heartbeat_thread.join(timeout=0.1)
+
+        strategy_elapsed = time.perf_counter() - strategy_start
+        if detailed_progress:
+            tqdm.write(
+                f"[{progress_desc or 'strategy'}] "
+                f"{rebalance_date.date()} strategy calc finished in {strategy_elapsed:.2f}s"
+            )
 
         if not isinstance(weights, pd.Series):
             raise TypeError("strategy_func must return a pandas Series")

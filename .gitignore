@@ -17,3 +17,6 @@ data/processed
 
 # requirements
 requirements.txt
+
+# claude
+CLAUDE.md
