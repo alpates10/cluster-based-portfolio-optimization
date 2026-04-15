@@ -20,6 +20,24 @@ from src.optimizers.cvar import get_cvar_weights
 from src.optimizers.cluster_equal_weight import (
     get_cluster_kmeans_equal_weight,
     get_cluster_kmedoids_dtw_equal_weight,
+    get_cluster_kmeans_adaptive_ew,
+    get_cluster_kmedoids_dtw_adaptive_ew,
+)
+from src.optimizers.cluster_markowitz import (
+    get_cluster_kmeans_markowitz_inter_ew_intra,
+    get_cluster_kmeans_ew_inter_markowitz_intra,
+    get_cluster_kmeans_markowitz_inter_markowitz_intra,
+    get_cluster_kmedoids_dtw_markowitz_inter_ew_intra,
+    get_cluster_kmedoids_dtw_ew_inter_markowitz_intra,
+    get_cluster_kmedoids_dtw_markowitz_inter_markowitz_intra,
+)
+from src.optimizers.cluster_markowitz_adaptive import (
+    get_cluster_kmeans_adaptive_markowitz_inter_ew_intra,
+    get_cluster_kmeans_adaptive_ew_inter_markowitz_intra,
+    get_cluster_kmeans_adaptive_markowitz_inter_markowitz_intra,
+    get_cluster_kmedoids_dtw_adaptive_markowitz_inter_ew_intra,
+    get_cluster_kmedoids_dtw_adaptive_ew_inter_markowitz_intra,
+    get_cluster_kmedoids_dtw_adaptive_markowitz_inter_markowitz_intra,
 )
 from src.backtest.rolling import run_rolling_backtest
 
@@ -28,17 +46,46 @@ K_VALUES = [2, 3, 4, 5, 6, 7, 8]
 CLASSICAL_NAMES = {"equal_weight", "mean_variance", "gmv", "cvar"}
 
 
+# ── Fixed-k Markowitz strategy families ──────────────────────────────────────
+_MARKOWITZ_FAMILIES = (
+    "kmeans_markowitz_inter_ew_intra",
+    "kmeans_ew_inter_markowitz_intra",
+    "kmeans_markowitz_inter_markowitz_intra",
+    "kmedoids_dtw_markowitz_inter_ew_intra",
+    "kmedoids_dtw_ew_inter_markowitz_intra",
+    "kmedoids_dtw_markowitz_inter_markowitz_intra",
+)
+
+# ── Adaptive strategy names (need selected_k.csv) ─────────────────────────────
+_ADAPTIVE_STRATEGY_NAMES = {
+    "kmeans_adaptive_ew",
+    "kmedoids_dtw_adaptive_ew",
+    "kmeans_adaptive_markowitz_inter_ew_intra",
+    "kmeans_adaptive_ew_inter_markowitz_intra",
+    "kmeans_adaptive_markowitz_inter_markowitz_intra",
+    "kmedoids_dtw_adaptive_markowitz_inter_ew_intra",
+    "kmedoids_dtw_adaptive_ew_inter_markowitz_intra",
+    "kmedoids_dtw_adaptive_markowitz_inter_markowitz_intra",
+}
+
+
 def _strategy_out_dir(base_out_dir: Path, strategy_name: str) -> Path:
     """Map a strategy name to its output directory under the new folder layout.
 
-    Classical strategies → backtests/<name>/
-    KMeans clustering   → backtests/kmeans_equal_weight/<name>/
-    K-Medoids clustering → backtests/kmedoids_dtw_equal_weight/<name>/
+    Classical strategies          → backtests/<name>/
+    KMeans equal-weight (fixed k) → backtests/kmeans_equal_weight/<name>/
+    KMedoids equal-weight (fixed k)→ backtests/kmedoids_dtw_equal_weight/<name>/
+    Markowitz families (fixed k)  → backtests/<family>/<name>/
+    Adaptive strategies           → backtests/<name>/
     """
     if strategy_name.startswith("kmeans_k"):
         return base_out_dir / "kmeans_equal_weight" / strategy_name
     if strategy_name.startswith("kmedoids_dtw_k"):
         return base_out_dir / "kmedoids_dtw_equal_weight" / strategy_name
+    # Fixed-k Markowitz: <family>_k{n}  →  backtests/<family>/<strategy_name>/
+    for family in _MARKOWITZ_FAMILIES:
+        if strategy_name.startswith(f"{family}_k"):
+            return base_out_dir / family / strategy_name
     return base_out_dir / strategy_name
 
 
@@ -85,19 +132,77 @@ def _build_strategies(mode: str) -> dict:
                 dtw_n_jobs=-1,
             )
 
+    if mode in ("adaptive", "all"):
+        strategies["kmeans_adaptive_ew"] = partial(
+            get_cluster_kmeans_adaptive_ew,
+            random_state=42,
+        )
+        strategies["kmedoids_dtw_adaptive_ew"] = partial(
+            get_cluster_kmedoids_dtw_adaptive_ew,
+            random_state=42,
+            dtw_n_jobs=-1,
+        )
+
+    # ── Fixed-k Markowitz strategies ──────────────────────────────────────────
+    _KMEANS_MARKOWITZ_FUNCS = {
+        "kmeans_markowitz_inter_ew_intra":       get_cluster_kmeans_markowitz_inter_ew_intra,
+        "kmeans_ew_inter_markowitz_intra":        get_cluster_kmeans_ew_inter_markowitz_intra,
+        "kmeans_markowitz_inter_markowitz_intra": get_cluster_kmeans_markowitz_inter_markowitz_intra,
+    }
+    _KMEDOIDS_MARKOWITZ_FUNCS = {
+        "kmedoids_dtw_markowitz_inter_ew_intra":       get_cluster_kmedoids_dtw_markowitz_inter_ew_intra,
+        "kmedoids_dtw_ew_inter_markowitz_intra":        get_cluster_kmedoids_dtw_ew_inter_markowitz_intra,
+        "kmedoids_dtw_markowitz_inter_markowitz_intra": get_cluster_kmedoids_dtw_markowitz_inter_markowitz_intra,
+    }
+
+    if mode in ("kmeans_markowitz", "all"):
+        for family, func in _KMEANS_MARKOWITZ_FUNCS.items():
+            for k in K_VALUES:
+                strategies[f"{family}_k{k}"] = partial(func, global_k=k, random_state=42)
+
+    if mode in ("kmedoids_markowitz", "all"):
+        for family, func in _KMEDOIDS_MARKOWITZ_FUNCS.items():
+            for k in K_VALUES:
+                strategies[f"{family}_k{k}"] = partial(
+                    func, global_k=k, random_state=42, dtw_n_jobs=-1
+                )
+
+    # ── Adaptive Markowitz strategies ─────────────────────────────────────────
+    if mode in ("adaptive_markowitz", "all"):
+        strategies["kmeans_adaptive_markowitz_inter_ew_intra"] = partial(
+            get_cluster_kmeans_adaptive_markowitz_inter_ew_intra, random_state=42
+        )
+        strategies["kmeans_adaptive_ew_inter_markowitz_intra"] = partial(
+            get_cluster_kmeans_adaptive_ew_inter_markowitz_intra, random_state=42
+        )
+        strategies["kmeans_adaptive_markowitz_inter_markowitz_intra"] = partial(
+            get_cluster_kmeans_adaptive_markowitz_inter_markowitz_intra, random_state=42
+        )
+        strategies["kmedoids_dtw_adaptive_markowitz_inter_ew_intra"] = partial(
+            get_cluster_kmedoids_dtw_adaptive_markowitz_inter_ew_intra,
+            random_state=42, dtw_n_jobs=-1,
+        )
+        strategies["kmedoids_dtw_adaptive_ew_inter_markowitz_intra"] = partial(
+            get_cluster_kmedoids_dtw_adaptive_ew_inter_markowitz_intra,
+            random_state=42, dtw_n_jobs=-1,
+        )
+        strategies["kmedoids_dtw_adaptive_markowitz_inter_markowitz_intra"] = partial(
+            get_cluster_kmedoids_dtw_adaptive_markowitz_inter_markowitz_intra,
+            random_state=42, dtw_n_jobs=-1,
+        )
+
     return strategies
 
 
 def _already_done(base_out_dir: Path, strategy_name: str) -> bool:
-    """Return True if all 3 output files exist for this strategy."""
+    """Return True if all required output files exist for this strategy."""
     out_dir = _strategy_out_dir(base_out_dir, strategy_name)
+    required_suffixes = ["daily_portfolio_returns", "monthly_portfolio_returns", "weights"]
+    if strategy_name in _ADAPTIVE_STRATEGY_NAMES:
+        required_suffixes.append("selected_k")
     return all(
         (out_dir / f"{strategy_name}_{suffix}.csv").exists()
-        for suffix in (
-            "daily_portfolio_returns",
-            "monthly_portfolio_returns",
-            "weights",
-        )
+        for suffix in required_suffixes
     )
 
 
@@ -105,12 +210,20 @@ def main():
     parser = argparse.ArgumentParser(description="Run rolling backtests.")
     parser.add_argument(
         "--mode",
-        choices=["classical", "kmeans", "kmedoids", "all"],
+        choices=[
+            "classical", "kmeans", "kmedoids", "adaptive",
+            "kmeans_markowitz", "kmedoids_markowitz", "adaptive_markowitz",
+            "all",
+        ],
         default="all",
         help=(
             "classical → equal_weight/mean_variance/gmv/cvar only; "
-            "kmeans → kmeans_k2..k8; "
-            "kmedoids → kmedoids_dtw_k2..k8; "
+            "kmeans → kmeans_k2..k8 (equal-weight); "
+            "kmedoids → kmedoids_dtw_k2..k8 (equal-weight); "
+            "adaptive → adaptive equal-weight (kmeans + kmedoids); "
+            "kmeans_markowitz → 3 markowitz variants × k2..k8 (kmeans); "
+            "kmedoids_markowitz → 3 markowitz variants × k2..k8 (kmedoids); "
+            "adaptive_markowitz → 6 adaptive markowitz strategies; "
             "all → everything (default)"
         ),
     )
@@ -153,7 +266,7 @@ def main():
 
         t0 = time.perf_counter()
         try:
-            portfolio_returns, weights_history = run_rolling_backtest(
+            portfolio_returns, weights_history, metadata_df = run_rolling_backtest(
                 returns=returns,
                 strategy_func=strategy_func,
                 estimation_window=756,
@@ -185,6 +298,9 @@ def main():
             out_dir / f"{strategy_name}_monthly_portfolio_returns.csv"
         )
         weights_history.to_csv(out_dir / f"{strategy_name}_weights.csv")
+
+        if strategy_name in _ADAPTIVE_STRATEGY_NAMES and not metadata_df.empty:
+            metadata_df.to_csv(out_dir / f"{strategy_name}_selected_k.csv")
 
         tqdm.write(f"    Saved to: {out_dir}")
 

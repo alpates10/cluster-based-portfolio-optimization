@@ -32,7 +32,7 @@ def run_rolling_backtest(
     progress_desc: str | None = None,
     detailed_progress: bool = False,
     heartbeat_seconds: int | None = None,
-) -> tuple[pd.Series, pd.DataFrame]:
+) -> tuple[pd.Series, pd.DataFrame, pd.DataFrame]:
     """
     Run a rolling monthly backtest.
 
@@ -41,7 +41,10 @@ def run_rolling_backtest(
     returns : pd.DataFrame
         Daily returns matrix (T x N), no NaNs.
     strategy_func : callable
-        Function taking window_returns and returning pd.Series weights.
+        Function taking window_returns and returning either a pd.Series of
+        weights, or a ``(weights, metadata_dict)`` tuple.  When a tuple is
+        returned the metadata dicts are collected across rebalance dates and
+        returned as a third DataFrame (index = rebalance_date).
     estimation_window : int
         Number of past trading days used for estimation.
     show_progress : bool
@@ -59,11 +62,16 @@ def run_rolling_backtest(
         Daily out-of-sample portfolio returns.
     weights_history : pd.DataFrame
         Portfolio weights at each rebalance date.
+    metadata_df : pd.DataFrame
+        Per-rebalance metadata collected from the strategy (empty DataFrame
+        when the strategy returns only weights).
     """
     rebalance_dates = get_monthly_rebalance_dates(returns, estimation_window)
 
     portfolio_returns_list = []
     weights_records = []
+    metadata_records: list[dict] = []
+    metadata_dates: list[pd.Timestamp] = []
 
     rebalance_iter = rebalance_dates
     progress_bar = None
@@ -109,7 +117,7 @@ def run_rolling_backtest(
             heartbeat_thread.start()
 
         try:
-            weights = strategy_func(window_returns)
+            result = strategy_func(window_returns)
         finally:
             if stop_event is not None:
                 stop_event.set()
@@ -123,8 +131,17 @@ def run_rolling_backtest(
                 f"{rebalance_date.date()} strategy calc finished in {strategy_elapsed:.2f}s"
             )
 
+        # Strategy may return (weights,) or (weights, metadata_dict)
+        if isinstance(result, tuple):
+            weights = result[0]
+            if len(result) >= 2 and isinstance(result[1], dict):
+                metadata_records.append(result[1])
+                metadata_dates.append(rebalance_date)
+        else:
+            weights = result
+
         if not isinstance(weights, pd.Series):
-            raise TypeError("strategy_func must return a pandas Series")
+            raise TypeError("strategy_func must return a pandas Series (or a tuple whose first element is a Series)")
 
         # weights should be aligned with returns columns
         weights = weights.reindex(returns.columns)
@@ -166,4 +183,10 @@ def run_rolling_backtest(
     weights_history = pd.DataFrame(weights_records)
     weights_history.index.name = "rebalance_date"
 
-    return portfolio_returns, weights_history
+    if metadata_records:
+        metadata_df = pd.DataFrame(metadata_records, index=pd.DatetimeIndex(metadata_dates))
+        metadata_df.index.name = "rebalance_date"
+    else:
+        metadata_df = pd.DataFrame()
+
+    return portfolio_returns, weights_history, metadata_df

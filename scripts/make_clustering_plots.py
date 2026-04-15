@@ -39,7 +39,7 @@ from src.clustering.representations import raw_return_representation
 from src.clustering.pipeline import _DTW_CACHE_DIR, _make_dtw_cache_key
 
 # ── Configuration ────────────────────────────────────────────────────────────
-TARGET_DATE = "2016-06-30"   # approximate window end; nearest available used
+TARGET_DATE = "2019-12-31"   # approximate window end; nearest available used
 ESTIMATION_WINDOW = 756      # trading days (~3 years), matches run_backtest.py
 K_VALUES = [1, 2, 3, 4, 5, 6, 7, 8]
 RANDOM_STATE = 42

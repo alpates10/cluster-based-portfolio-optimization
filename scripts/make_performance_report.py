@@ -39,6 +39,7 @@ from src.analysis.backtest_summary import (
 # ── Constants ─────────────────────────────────────────────────────────────────
 CLASSICAL_NAMES = {"equal_weight", "mean_variance", "gmv", "cvar"}
 CLUSTERING_PARENTS = ["kmeans_equal_weight", "kmedoids_dtw_equal_weight"]
+ADAPTIVE_STRATEGY_NAMES = {"kmeans_adaptive_ew", "kmedoids_dtw_adaptive_ew"}
 ROLLING_WINDOW_MONTHS = 12
 RISK_FREE_RATE = 0.0
 SUMMARY_ROOT = PROJECT_ROOT / "data" / "processed" / "backtests" / "summary"
@@ -53,11 +54,35 @@ def _classical_dirs(backtests_dir: Path) -> list[Path]:
 
 
 def _clustering_dirs(backtests_dir: Path) -> list[Path]:
+    """Auto-discover all clustering strategy directories.
+
+    Scans every directory under *backtests_dir* whose name starts with
+    ``kmeans_`` or ``kmedoids_``.
+
+    * If the directory contains sub-directories (e.g. per-k strategy dirs),
+      those sub-directories are added individually.
+    * If the directory contains no sub-directories it is treated as a flat
+      (e.g. adaptive) strategy directory and added directly.
+
+    This covers both the legacy ``kmeans_equal_weight/kmeans_k*/`` layout and
+    the newer ``kmeans_markowitz_inter_ew_intra/kmeans_markowitz_*_k*/``
+    layout, as well as all flat adaptive strategy directories.
+    """
     dirs: list[Path] = []
-    for parent_name in CLUSTERING_PARENTS:
-        parent = backtests_dir / parent_name
-        if parent.exists():
-            dirs.extend(sorted(p for p in parent.iterdir() if p.is_dir()))
+    for candidate in sorted(backtests_dir.iterdir()):
+        if not candidate.is_dir():
+            continue
+        name = candidate.name
+        if not (name.startswith("kmeans_") or name.startswith("kmedoids_")):
+            continue
+
+        subdirs = sorted(p for p in candidate.iterdir() if p.is_dir())
+        if subdirs:
+            dirs.extend(subdirs)
+        else:
+            # Flat strategy directory (adaptive, or single-strategy folder)
+            dirs.append(candidate)
+
     return dirs
 
 
