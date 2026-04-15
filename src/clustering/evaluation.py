@@ -75,7 +75,8 @@ def evaluate_clustering_config(
     k: int,
     random_state: int = 42,
     dtw_n_jobs: int = -1,
-    dtw_use_gpu: bool = False,
+    dtw_cache_dir: str | None = None,
+    dtw_cache_key: str | None = None,
 ) -> dict:
     """
     Evaluate one (method, distance, k) configuration.
@@ -103,7 +104,9 @@ def evaluate_clustering_config(
 
             sil = np.nan
             db = np.nan
-            if 2 <= n_clusters_found < asset_return_matrix.shape[0]:
+            if k == 1:
+                sil = 0.0  # tek cluster: silhouette tanımsız, 0 olarak gösterilir
+            elif 2 <= n_clusters_found < asset_return_matrix.shape[0]:
                 sil = float(silhouette_score(asset_return_matrix, labels, metric="euclidean"))
                 db = float(davies_bouldin_score(asset_return_matrix, labels))
 
@@ -121,7 +124,8 @@ def evaluate_clustering_config(
                 asset_return_matrix=asset_return_matrix,
                 distance=distance_key,
                 dtw_n_jobs=dtw_n_jobs,
-                dtw_use_gpu=dtw_use_gpu,
+                dtw_cache_dir=dtw_cache_dir,
+                dtw_cache_key=dtw_cache_key,
             )
             labels = kmedoids_labels_from_distance(
                 distance_matrix=dist.copy(),
@@ -132,7 +136,9 @@ def evaluate_clustering_config(
 
             sil = np.nan
             db = np.nan
-            if 2 <= n_clusters_found < asset_return_matrix.shape[0]:
+            if k == 1:
+                sil = 0.0  # tek cluster: silhouette tanımsız, 0 olarak gösterilir
+            elif 2 <= n_clusters_found < asset_return_matrix.shape[0]:
                 sil = float(silhouette_score(dist, labels, metric="precomputed"))
                 db = float(davies_bouldin_from_distance(dist, labels))
 

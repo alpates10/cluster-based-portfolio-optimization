@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.clustering.evaluation import evaluate_clustering_config, recommend_global_k
+from src.clustering.pipeline import _DTW_CACHE_DIR, _make_dtw_cache_key
 from src.clustering.representations import raw_return_representation
 from src.clustering.selection import DEFAULT_K_CANDIDATES, select_non_overlapping_windows
 from src.data.load import load_returns_csv
@@ -40,6 +41,8 @@ def _plot_metric_lines(results_df: pd.DataFrame, out_dir: Path, method: str, dis
     avg = subset.groupby("k", as_index=False)[metric].mean().sort_values("k")
     plt.plot(avg["k"], avg[metric], marker="o", linewidth=2.5, color="black", label="average")
 
+    k_values = sorted(subset["k"].unique())
+    plt.xticks(k_values)
     plt.title(f"{method} + {distance} | {metric}")
     plt.xlabel("k")
     plt.ylabel(metric)
@@ -99,7 +102,7 @@ def main() -> None:
 
     window_length = 756
     n_windows = 5
-    k_candidates = DEFAULT_K_CANDIDATES
+    k_candidates = [1] + DEFAULT_K_CANDIDATES
 
     # Core configs; pipeline is modular and can be extended with more combos.
     configs = [
@@ -123,14 +126,15 @@ def main() -> None:
         end_iloc = int(w["end_iloc"])
         window_returns = returns.iloc[start_iloc : end_iloc + 1]
         asset_matrix = raw_return_representation(window_returns)
+        cache_key = _make_dtw_cache_key(window_returns)
         for cfg in configs:
             for k in k_candidates:
-                tasks.append((w, cfg, k, asset_matrix))
+                tasks.append((w, cfg, k, asset_matrix, cache_key))
 
     has_tslearn = importlib.util.find_spec("tslearn") is not None
 
     rows: list[dict] = []
-    for w, cfg, k, asset_matrix in tqdm(tasks, desc="Evaluating clustering configs", unit="cfg"):
+    for w, cfg, k, asset_matrix, cache_key in tqdm(tasks, desc="Evaluating clustering configs", unit="cfg"):
         if cfg["method"] == "kmedoids" and cfg["distance"] == "dtw" and not has_tslearn:
             rows.append(
                 {
@@ -157,7 +161,8 @@ def main() -> None:
             k=int(k),
             random_state=42,
             dtw_n_jobs=-1,
-            dtw_use_gpu=False,
+            dtw_cache_dir=_DTW_CACHE_DIR,
+            dtw_cache_key=cache_key,
         )
         row = {
             "window_id": w["window_id"],

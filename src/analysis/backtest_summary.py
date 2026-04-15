@@ -125,11 +125,13 @@ def load_strategy_returns(strategy_dir: Path) -> tuple[pd.Series | None, pd.Seri
 
 def build_monthly_returns_comparison_table(
     backtests_root: Path,
+    strategy_dirs: list[Path] | None = None,
 ) -> tuple[pd.DataFrame, list[str]]:
     monthly_series_by_strategy: dict[str, pd.Series] = {}
     skipped_messages: list[str] = []
 
-    for strategy_dir in list_strategy_directories(backtests_root):
+    dirs = strategy_dirs if strategy_dirs is not None else list_strategy_directories(backtests_root)
+    for strategy_dir in dirs:
         strategy_name = strategy_dir.name
         try:
             monthly_returns, source = load_strategy_monthly_returns(strategy_dir)
@@ -152,11 +154,13 @@ def build_monthly_returns_comparison_table(
 def build_summary_metrics_table(
     backtests_root: Path,
     risk_free_rate: float = 0.0,
+    strategy_dirs: list[Path] | None = None,
 ) -> tuple[pd.DataFrame, list[str]]:
     rows: list[dict] = []
     logs: list[str] = []
 
-    for strategy_dir in list_strategy_directories(backtests_root):
+    dirs = strategy_dirs if strategy_dirs is not None else list_strategy_directories(backtests_root)
+    for strategy_dir in dirs:
         strategy_name = strategy_dir.name
         daily_returns, monthly_returns, source_logs = load_strategy_returns(strategy_dir)
 
