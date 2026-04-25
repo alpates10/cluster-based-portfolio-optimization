@@ -16,7 +16,7 @@ _DTW_CACHE_DIR: str = str(
     Path(__file__).resolve().parents[2] / "data" / "processed" / "dtw_cache"
 )
 
-K_VALUES_ADAPTIVE = [2, 3, 4, 5, 6, 7, 8]
+K_VALUES_ADAPTIVE = [2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30, 50]
 
 
 def _make_dtw_cache_key_for_window(window_returns: pd.DataFrame) -> str:

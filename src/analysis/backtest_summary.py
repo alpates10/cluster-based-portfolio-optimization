@@ -102,6 +102,21 @@ def load_strategy_daily_returns(strategy_dir: Path) -> tuple[pd.Series, str]:
     return daily_returns, f"daily_file:{daily_path.name}"
 
 
+def load_strategy_monthly_returns_direct(strategy_dir: Path) -> pd.Series | None:
+    """Load monthly returns from the monthly CSV file only; no daily aggregation fallback.
+
+    Returns None if no monthly file exists or the file cannot be loaded.
+    """
+    strategy_name = strategy_dir.name
+    monthly_path = _find_returns_file(strategy_dir, strategy_name, frequency="monthly")
+    if monthly_path is None:
+        return None
+    try:
+        return _load_return_series(monthly_path)
+    except Exception:
+        return None
+
+
 def load_strategy_returns(strategy_dir: Path) -> tuple[pd.Series | None, pd.Series | None, list[str]]:
     logs: list[str] = []
 
@@ -164,6 +179,17 @@ def build_summary_metrics_table(
         strategy_name = strategy_dir.name
         daily_returns, monthly_returns, source_logs = load_strategy_returns(strategy_dir)
 
+        # n_days: count from the daily CSV file only
+        n_days: int | float = float("nan")
+        if daily_returns is not None:
+            n_days = int(len(daily_returns))
+
+        # n_months: count from the monthly CSV file only (no daily aggregation fallback)
+        n_months: int | float = float("nan")
+        monthly_direct = load_strategy_monthly_returns_direct(strategy_dir)
+        if monthly_direct is not None:
+            n_months = int(len(monthly_direct))
+
         try:
             if daily_returns is not None:
                 metrics = compute_performance_metrics(
@@ -193,7 +219,8 @@ def build_summary_metrics_table(
                     "sharpe_ratio": metrics["sharpe_ratio"],
                     "max_drawdown": metrics["max_drawdown"],
                     "calmar_ratio": metrics["calmar_ratio"],
-                    "n_obs": metrics["n_obs"],
+                    "n_days": n_days,
+                    "n_months": n_months,
                     "start_date": metrics["start_date"],
                     "end_date": metrics["end_date"],
                 }
@@ -219,7 +246,8 @@ def build_summary_metrics_table(
             "sharpe_ratio",
             "max_drawdown",
             "calmar_ratio",
-            "n_obs",
+            "n_days",
+            "n_months",
             "start_date",
             "end_date",
         ]

@@ -41,7 +41,7 @@ from src.optimizers.cluster_markowitz_adaptive import (
 )
 from src.backtest.rolling import run_rolling_backtest
 
-K_VALUES = [2, 3, 4, 5, 6, 7, 8]
+K_VALUES = [2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30, 50]
 
 CLASSICAL_NAMES = {"equal_weight", "mean_variance", "gmv", "cvar"}
 

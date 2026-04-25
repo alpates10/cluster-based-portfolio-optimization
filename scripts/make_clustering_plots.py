@@ -8,6 +8,8 @@ For a sample window centred around 2016-06-30 this script:
    (correlation for KMeans, DTW for K-Medoids) and saves one PNG per
    (method, k) as mds_kmeans_k5.png / mds_kmedoids_dtw_k5.png.
 3. Produces silhouette-vs-k comparison plots for both methods.
+4. Produces a large comparison grid (k=1..8 × KMeans / KMedoids)
+   as mds_comparison_grid.png.
 
 Run *after* scripts/run_backtest.py so that the DTW cache exists.
 """
@@ -27,7 +29,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from sklearn.manifold import MDS
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import silhouette_score, pairwise_distances
 
 from src.data.load import load_returns_csv
 from src.clustering.algorithms import kmeans_labels, kmedoids_labels_from_distance
@@ -39,9 +41,9 @@ from src.clustering.representations import raw_return_representation
 from src.clustering.pipeline import _DTW_CACHE_DIR, _make_dtw_cache_key
 
 # ── Configuration ────────────────────────────────────────────────────────────
-TARGET_DATE = "2019-12-31"   # approximate window end; nearest available used
+TARGET_DATE = "2008-04-01"   # approximate window end; nearest available used
 ESTIMATION_WINDOW = 756      # trading days (~3 years), matches run_backtest.py
-K_VALUES = [1, 2, 3, 4, 5, 6, 7, 8]
+K_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30, 50]   # k values to plot and compare
 RANDOM_STATE = 42
 MDS_MAX_ITER = 300
 MDS_N_INIT = 4
@@ -72,7 +74,6 @@ def _mds_embedding(dist_matrix: np.ndarray) -> np.ndarray:
     import sklearn
     from packaging.version import Version
     if Version(sklearn.__version__) >= Version("1.8"):
-        # sklearn ≥ 1.8: metric_mds + metric='precomputed'
         mds = MDS(
             n_components=2,
             metric_mds=True,
@@ -84,7 +85,6 @@ def _mds_embedding(dist_matrix: np.ndarray) -> np.ndarray:
             random_state=RANDOM_STATE,
         )
     else:
-        # sklearn < 1.8: eski API
         mds = MDS(
             n_components=2,
             metric=True,
@@ -104,18 +104,27 @@ def _discrete_cmap(n: int):
     return [base(i / max(n - 1, 1)) for i in range(n)]
 
 
-def plot_mds(
+def _axis_limits_with_padding(
+    embedding: np.ndarray,
+    pad_fraction: float = 0.10,
+) -> tuple[float, float, float, float]:
+    """Return (xmin, xmax, ymin, ymax) with pad_fraction padding on each side."""
+    xmin, xmax = float(embedding[:, 0].min()), float(embedding[:, 0].max())
+    ymin, ymax = float(embedding[:, 1].min()), float(embedding[:, 1].max())
+    x_pad = (xmax - xmin) * pad_fraction
+    y_pad = (ymax - ymin) * pad_fraction
+    return xmin - x_pad, xmax + x_pad, ymin - y_pad, ymax + y_pad
+
+
+def _scatter_clusters(
+    ax: plt.Axes,
     embedding: np.ndarray,
     labels: np.ndarray,
-    k: int,
-    method_label: str,
-    output_path: Path,
 ) -> None:
+    """Draw one scatter series per cluster on *ax*."""
     unique = sorted(np.unique(labels))
     colours = _discrete_cmap(len(unique))
     colour_map = {c: colours[i] for i, c in enumerate(unique)}
-
-    fig, ax = plt.subplots(figsize=(8, 6))
     for cid in unique:
         mask = labels == cid
         ax.scatter(
@@ -128,11 +137,28 @@ def plot_mds(
             edgecolors="none",
         )
 
+
+# ── DEĞİŞİKLİK 1: tekli plot — eksenleri veriye sığdır (10 % padding) ────────
+
+def plot_mds(
+    embedding: np.ndarray,
+    labels: np.ndarray,
+    k: int,
+    method_label: str,
+    output_path: Path,
+) -> None:
+    fig, ax = plt.subplots(figsize=(8, 6))
+    _scatter_clusters(ax, embedding, labels)
+
+    # Axis limits derived from the embedding — no more corner-crowding
+    xlo, xhi, ylo, yhi = _axis_limits_with_padding(embedding)
+    ax.set_xlim(xlo, xhi)
+    ax.set_ylim(ylo, yhi)
+
     ax.set_title(f"MDS — {method_label}  k={k}\nwindow ending {TARGET_DATE}")
     ax.set_xlabel("MDS dimension 1")
     ax.set_ylabel("MDS dimension 2")
     ax.legend(loc="best", fontsize=7, markerscale=1.5)
-    ax.set_aspect("equal", adjustable="datalim")
     fig.tight_layout()
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
@@ -153,7 +179,6 @@ def plot_silhouette_comparison(
 
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(ks, ss, marker="o", linewidth=2, color="steelblue")
-
     ax.set_title(f"Silhouette Score vs k — {method_label}\nwindow ending {TARGET_DATE}")
     ax.set_xlabel("Number of clusters (k)")
     ax.set_ylabel("Silhouette score")
@@ -164,6 +189,122 @@ def plot_silhouette_comparison(
     plt.close(fig)
     print(f"  Saved: {output_path.name}")
 
+
+# ── DEĞİŞİKLİK 2: büyük karşılaştırma grid'i ─────────────────────────────────
+
+def _local_axis_limits(
+    embedding: np.ndarray,
+    pad_fraction: float = 0.20,
+    pct_lo: float = 5.0,
+    pct_hi: float = 95.0,
+) -> tuple[float, float, float, float]:
+    """Per-subplot limits: percentile clip + pad_fraction padding."""
+    xlo = float(np.percentile(embedding[:, 0], pct_lo))
+    xhi = float(np.percentile(embedding[:, 0], pct_hi))
+    ylo = float(np.percentile(embedding[:, 1], pct_lo))
+    yhi = float(np.percentile(embedding[:, 1], pct_hi))
+    x_pad = (xhi - xlo) * pad_fraction
+    y_pad = (yhi - ylo) * pad_fraction
+    return xlo - x_pad, xhi + x_pad, ylo - y_pad, yhi + y_pad
+
+
+def plot_mds_comparison_grid(
+    k_values: list[int],
+    mds_eucl: np.ndarray,
+    mds_corr: np.ndarray,
+    mds_dtw: np.ndarray,
+    km_labels_by_k: dict[int, np.ndarray],
+    kmed_labels_by_k: dict[int, np.ndarray],
+    plots_dir: Path,
+) -> None:
+    """k × 4 comparison grid:
+      col 0 — KMeans Euclidean MDS   (global limits)
+      col 1 — KMeans Correlation MDS (global limits)
+      col 2 — K-Medoids DTW          (global limits)
+      col 3 — K-Medoids DTW          (local limits: p5–p95 + 20 % padding)
+    Global limits are derived from the combined extent of cols 0, 1, and 2.
+    """
+    n_rows = len(k_values)
+    fig, axes = plt.subplots(
+        nrows=n_rows,
+        ncols=4,
+        figsize=(22, n_rows * 4),
+    )
+
+    # ── Global axis limits: cols 0, 1, 2 (euclidean, correlation, DTW) ───────
+    all_x = np.concatenate([mds_eucl[:, 0], mds_corr[:, 0], mds_dtw[:, 0]])
+    all_y = np.concatenate([mds_eucl[:, 1], mds_corr[:, 1], mds_dtw[:, 1]])
+    gx_lo, gx_hi, gy_lo, gy_hi = _axis_limits_with_padding(
+        np.column_stack([all_x, all_y])
+    )
+
+    # ── Column headers ────────────────────────────────────────────────────────
+    col_titles = [
+        "KMeans — Euclidean MDS",
+        "KMeans — Correlation MDS",
+        "K-Medoids DTW — global scale",
+        "K-Medoids DTW — local scale",
+    ]
+    for col_idx, title in enumerate(col_titles):
+        x_pos = (col_idx + 0.5) / 4
+        fig.text(
+            x_pos, 1.0,
+            title,
+            ha="center", va="bottom",
+            fontsize=13, fontweight="bold",
+            transform=fig.transFigure,
+        )
+
+    # ── Subplots ──────────────────────────────────────────────────────────────
+    def _style(ax: plt.Axes, title: str) -> None:
+        ax.set_title(title, fontsize=10)
+        ax.set_xlabel("MDS dim 1", fontsize=8)
+        ax.set_ylabel("MDS dim 2", fontsize=8)
+        ax.tick_params(labelsize=7)
+        ax.legend(loc="upper right", fontsize=6, markerscale=1.2,
+                  framealpha=0.7, borderpad=0.4)
+
+    for row_idx, k in enumerate(k_values):
+        ax_eucl, ax_corr, ax_glob, ax_loc = axes[row_idx]
+
+        # Col 0 — KMeans, Euclidean MDS, global limits
+        _scatter_clusters(ax_eucl, mds_eucl, km_labels_by_k[k])
+        ax_eucl.set_xlim(gx_lo, gx_hi)
+        ax_eucl.set_ylim(gy_lo, gy_hi)
+        _style(ax_eucl, f"KMeans  k={k}")
+
+        # Col 1 — KMeans, Correlation MDS, global limits
+        _scatter_clusters(ax_corr, mds_corr, km_labels_by_k[k])
+        ax_corr.set_xlim(gx_lo, gx_hi)
+        ax_corr.set_ylim(gy_lo, gy_hi)
+        _style(ax_corr, f"KMeans  k={k}")
+
+        # Col 2 — K-Medoids, global limits
+        _scatter_clusters(ax_glob, mds_dtw, kmed_labels_by_k[k])
+        ax_glob.set_xlim(gx_lo, gx_hi)
+        ax_glob.set_ylim(gy_lo, gy_hi)
+        _style(ax_glob, f"K-Medoids  k={k}")
+
+        # Col 3 — K-Medoids, local limits (p5–p95 + 20 % padding)
+        _scatter_clusters(ax_loc, mds_dtw, kmed_labels_by_k[k])
+        lx_lo, lx_hi, ly_lo, ly_hi = _local_axis_limits(mds_dtw)
+        ax_loc.set_xlim(lx_lo, lx_hi)
+        ax_loc.set_ylim(ly_lo, ly_hi)
+        _style(ax_loc, f"K-Medoids  k={k}  (local)")
+
+    fig.suptitle(
+        f"MDS Clustering Comparison — window ending {TARGET_DATE}",
+        fontsize=14, y=1.01,
+    )
+    fig.tight_layout()
+
+    output_path = plots_dir / "mds_comparison_grid.png"
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  Saved: {output_path.name}")
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
     # ── Paths ────────────────────────────────────────────────────────────────
@@ -179,7 +320,10 @@ def main() -> None:
     n_assets = asset_matrix.shape[0]
 
     # ── Distance matrices ─────────────────────────────────────────────────────
-    print("\nComputing correlation distance matrix (KMeans visualisation)...")
+    print("\nComputing Euclidean distance matrix (KMeans col 1 visualisation)...")
+    eucl_dist = pairwise_distances(asset_matrix, metric="euclidean")
+
+    print("Computing correlation distance matrix (KMeans col 2 visualisation)...")
     corr_dist = correlation_distance_matrix(asset_matrix)
 
     print("Computing / loading DTW distance matrix (K-Medoids)...")
@@ -192,21 +336,27 @@ def main() -> None:
     )
 
     # ── MDS embeddings (computed once per distance metric) ────────────────────
-    print("\nComputing MDS embedding on correlation distance...")
+    print("\nComputing MDS embedding on Euclidean distance...")
+    mds_eucl = _mds_embedding(eucl_dist)
+
+    print("Computing MDS embedding on correlation distance...")
     mds_corr = _mds_embedding(corr_dist)
 
     print("Computing MDS embedding on DTW distance...")
     mds_dtw = _mds_embedding(dtw_dist)
 
-    # ── Per-k plots and silhouette scores ─────────────────────────────────────
+    # ── Per-k plots, silhouette scores, and label collection ─────────────────
     sil_kmeans: list[float] = []
     sil_kmedoids: list[float] = []
+    km_labels_by_k: dict[int, np.ndarray] = {}
+    kmed_labels_by_k: dict[int, np.ndarray] = {}
 
     for k in K_VALUES:
         print(f"\n── k={k} ──────────────────────────────────")
 
         # KMeans
         km_labels = kmeans_labels(asset_matrix, n_clusters=k, random_state=RANDOM_STATE)
+        km_labels_by_k[k] = km_labels
         plot_mds(
             mds_corr,
             km_labels,
@@ -215,7 +365,7 @@ def main() -> None:
             output_path=plots_dir / f"mds_kmeans_k{k}.png",
         )
         if k == 1:
-            sil = 0.0  # tek cluster: silhouette tanımsız, 0 olarak gösterilir
+            sil = 0.0
         elif 2 <= len(np.unique(km_labels)) < n_assets:
             sil = float(silhouette_score(corr_dist, km_labels, metric="precomputed"))
         else:
@@ -230,6 +380,7 @@ def main() -> None:
             kmed_labels = kmedoids_labels_from_distance(
                 dtw_dist.copy(), n_clusters=k, random_state=RANDOM_STATE
             )
+        kmed_labels_by_k[k] = kmed_labels
         plot_mds(
             mds_dtw,
             kmed_labels,
@@ -238,7 +389,7 @@ def main() -> None:
             output_path=plots_dir / f"mds_kmedoids_dtw_k{k}.png",
         )
         if k == 1:
-            sil_kmed = 0.0  # tek cluster: silhouette tanımsız, 0 olarak gösterilir
+            sil_kmed = 0.0
         elif 2 <= len(np.unique(kmed_labels)) < n_assets:
             sil_kmed = float(silhouette_score(dtw_dist, kmed_labels, metric="precomputed"))
         else:
@@ -267,7 +418,6 @@ def main() -> None:
             label="KMeans (euclidean)", color="steelblue")
     ax.plot(K_VALUES, sil_kmedoids, marker="s", linewidth=2,
             label="K-Medoids DTW (precomputed)", color="darkorange")
-
     ax.set_title(f"Silhouette Score Comparison\nwindow ending {TARGET_DATE}")
     ax.set_xlabel("Number of clusters (k)")
     ax.set_ylabel("Silhouette score")
@@ -279,6 +429,19 @@ def main() -> None:
     fig.savefig(combined_path, dpi=150)
     plt.close(fig)
     print(f"  Saved: {combined_path.name}")
+
+    # ── Large comparison grid (k=1..8, KMeans vs K-Medoids) ──────────────────
+    print("\nGenerating MDS comparison grid...")
+    grid_k_values = list(range(1, 9))
+    plot_mds_comparison_grid(
+        k_values=grid_k_values,
+        mds_eucl=mds_eucl,
+        mds_corr=mds_corr,
+        mds_dtw=mds_dtw,
+        km_labels_by_k=km_labels_by_k,
+        kmed_labels_by_k=kmed_labels_by_k,
+        plots_dir=plots_dir,
+    )
 
     print(f"\nAll plots saved to: {plots_dir}")
 

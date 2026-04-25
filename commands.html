@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Çalıştırma Komutları</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f0f0f;
+    color: #e0e0e0;
+    padding: 2rem;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 15px;
+    font-weight: 500;
+    color: #888;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+  }
+  .section {
+    margin-bottom: 2.5rem;
+  }
+  .section-title {
+    font-size: 11px;
+    font-weight: 500;
+    color: #555;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 0.5px solid #1f1f1f;
+  }
+  .cmd-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border-bottom: 0.5px solid #1a1a1a;
+  }
+  .cmd-row:last-child { border-bottom: none; }
+  .cmd-desc {
+    font-size: 12px;
+    color: #4a4a4a;
+    min-width: 200px;
+    max-width: 200px;
+    padding: 10px 14px 10px 0;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+  .cmd-cell {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background: #141414;
+    border: 0.5px solid #222;
+    border-radius: 6px;
+    padding: 0 12px;
+    height: 36px;
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+    position: relative;
+    overflow: hidden;
+  }
+  .cmd-cell:hover { background: #1a1a1a; border-color: #333; }
+  .cmd-cell:active { background: #1f1f1f; }
+  .cmd-text {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 12px;
+    color: #c9c9c9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+  .cmd-text .flag { color: #6b8aad; }
+  .cmd-text .val { color: #9b7fd4; }
+  .copy-icon {
+    width: 14px;
+    height: 14px;
+    color: #333;
+    flex-shrink: 0;
+    margin-left: 8px;
+    transition: color 0.12s;
+  }
+  .cmd-cell:hover .copy-icon { color: #555; }
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    background: #222;
+    color: #aaa;
+    font-size: 12px;
+    padding: 7px 16px;
+    border-radius: 20px;
+    border: 0.5px solid #333;
+    opacity: 0;
+    transition: opacity 0.15s, transform 0.15s;
+    pointer-events: none;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+
+<h1>Portfolio Robustness — Çalıştırma Komutları</h1>
+
+<div class="section">
+  <div class="section-title">Backtestler</div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Klasik stratejiler</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">classical</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">KMeans EW — eksik k değerleri</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">kmeans</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">KMedoids DTW EW — eksik k değerleri</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">kmedoids</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Adaptive silhouette EW</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">adaptive</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">KMeans × Markowitz</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">kmeans_markowitz</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">KMedoids × Markowitz</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">kmedoids_markowitz</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Adaptive Markowitz (6 strateji)</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">adaptive_markowitz</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Tümü — checkpoint aktif</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">all</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Rolling Validation</div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Eksik kombinasyonları çalıştır</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/run_rolling_validation_backtest.py</span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Sıfırdan yeniden hesapla</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/run_rolling_validation_backtest.py <span class="flag">--force</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Tek kombinasyon örneği</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/run_rolling_validation_backtest.py <span class="flag">--method</span> <span class="val">kmeans</span> <span class="flag">--weighting</span> <span class="val">ew</span> <span class="flag">--val_window</span> <span class="val">12</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Raporlar</div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Klasik → summary/classical/</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/make_performance_report.py <span class="flag">--mode</span> <span class="val">classical</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Clustering → summary/clustering/</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/make_performance_report.py <span class="flag">--mode</span> <span class="val">clustering</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Rolling val → summary/rolling_validation/</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/make_performance_report.py <span class="flag">--mode</span> <span class="val">rolling_validation</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Tümü, 12m hizalı → summary/all/</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/make_performance_report.py <span class="flag">--mode</span> <span class="val">all</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Rolling val hariç → summary/all_no_rolling/</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/make_performance_report.py <span class="flag">--mode</span> <span class="val">all_no_rolling</span></span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">Görseller</div>
+  <div class="cmd-row">
+    <span class="cmd-desc">Silhouette ve elbow analizleri</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/analyze_clustering_k.py</span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">MDS ve clustering görselleri</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python scripts/make_clustering_plots.py</span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+  <div class="cmd-row">
+    <span class="cmd-desc">k seçim yöntemi analizi</span>
+    <div class="cmd-cell" onclick="copy(this)">
+      <span class="cmd-text">python experiments/k_selection_analysis.py</span>
+      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">kopyalandı</div>
+
+<script>
+function copy(el) {
+  const text = el.querySelector('.cmd-text').textContent.trim();
+  navigator.clipboard.writeText(text);
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1400);
+}
+</script>
+</body>
+</html>
