@@ -327,9 +327,9 @@ def _strategy_group_color(name: str) -> str | None:
         return "C9B8E8"
     if name.startswith("kmedoids_dtw_k"):
         return "B8D4F0"
-    if name.startswith("kmeans_") and ("markowitz" in name or "ew_inter" in name):
+    if name.startswith("kmeans_") and ("markowitz" in name or "ew_inter" in name) and "adaptive" not in name:
         return "B8E8D4"
-    if name.startswith("kmedoids_dtw_") and ("markowitz" in name or "ew_inter" in name):
+    if name.startswith("kmedoids_dtw_") and ("markowitz" in name or "ew_inter" in name) and "adaptive" not in name:
         return "F0D4B8"
     if "adaptive" in name:
         return "F0B8C8"
