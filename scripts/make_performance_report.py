@@ -51,6 +51,7 @@ from src.analysis.backtest_summary import (
     save_summary_metrics_table,
 )
 from src.metrics.performance import compute_performance_metrics
+from src.paths import get_backtests_dir, UNIVERSE_CHOICES
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 CLASSICAL_NAMES = {"equal_weight", "mean_variance", "gmv", "cvar"}
@@ -58,7 +59,7 @@ CLUSTERING_PARENTS = ["kmeans_equal_weight", "kmedoids_dtw_equal_weight"]
 ADAPTIVE_STRATEGY_NAMES = {"kmeans_adaptive_ew", "kmedoids_dtw_adaptive_ew"}
 ROLLING_WINDOW_MONTHS = 12
 RISK_FREE_RATE = 0.0
-SUMMARY_ROOT = PROJECT_ROOT / "data" / "processed" / "backtests" / "summary"
+SUMMARY_ROOT = PROJECT_ROOT / "data" / "processed" / "backtests" / "summary"  # overridden in main()
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -578,9 +579,12 @@ def main() -> None:
             "all_no_rolling → classical+clustering, natural start dates → summary/all_no_rolling/"
         ),
     )
+    parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
     args = parser.parse_args()
 
-    backtests_dir = PROJECT_ROOT / "data" / "processed" / "backtests"
+    global SUMMARY_ROOT
+    backtests_dir = get_backtests_dir(args.universe)
+    SUMMARY_ROOT = backtests_dir / "summary"
     _delete_legacy_files(backtests_dir)
 
     if args.mode == "classical":

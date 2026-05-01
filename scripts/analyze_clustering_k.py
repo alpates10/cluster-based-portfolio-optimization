@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import os
 from pathlib import Path
@@ -18,10 +19,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.clustering.evaluation import evaluate_clustering_config, recommend_global_k
-from src.clustering.pipeline import _DTW_CACHE_DIR, _make_dtw_cache_key
+from src.clustering.pipeline import _make_dtw_cache_key
 from src.clustering.representations import raw_return_representation
 from src.clustering.selection import DEFAULT_K_CANDIDATES, select_non_overlapping_windows
 from src.data.load import load_returns_csv
+from src.paths import get_returns_path, get_clustering_dir, get_dtw_cache_dir, UNIVERSE_CHOICES
 
 
 def _plot_metric_lines(results_df: pd.DataFrame, out_dir: Path, method: str, distance: str, metric: str) -> None:
@@ -94,11 +96,17 @@ def _plot_heatmap_silhouette(results_df: pd.DataFrame, out_dir: Path, method: st
 
 
 def main() -> None:
-    returns_path = PROJECT_ROOT / "data" / "processed" / "returns_final.csv"
-    out_root = PROJECT_ROOT / "data" / "processed" / "clustering"
+    parser = argparse.ArgumentParser(description="Analyze optimal k for clustering.")
+    parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
+    args = parser.parse_args()
+
+    returns_path = get_returns_path(args.universe)
+    out_root = get_clustering_dir(args.universe)
     plots_dir = out_root / "plots"
     out_root.mkdir(parents=True, exist_ok=True)
     plots_dir.mkdir(parents=True, exist_ok=True)
+
+    dtw_cache = get_dtw_cache_dir(args.universe)
 
     window_length = 756
     n_windows = 5
@@ -161,7 +169,7 @@ def main() -> None:
             k=int(k),
             random_state=42,
             dtw_n_jobs=-1,
-            dtw_cache_dir=_DTW_CACHE_DIR,
+            dtw_cache_dir=dtw_cache,
             dtw_cache_key=cache_key,
         )
         row = {

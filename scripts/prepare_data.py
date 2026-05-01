@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 import json
+import sys
+
 import pandas as pd
 import numpy as np
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from src.paths import get_raw_dir, get_processed_dir, UNIVERSE_CHOICES
 
 
 def load_close_series(fp: Path) -> pd.Series:
@@ -25,15 +34,21 @@ def load_close_series(fp: Path) -> pd.Series:
 
 
 def main():
-    START_DATE = "2005-01-01"
+    parser = argparse.ArgumentParser(description="Prepare return data for a given universe.")
+    parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
+    parser.add_argument("--start_date", default="2005-01-01", metavar="YYYY-MM-DD")
+    parser.add_argument("--coverage_threshold", type=float, default=0.95)
+    parser.add_argument("--drop_worst_k", type=int, default=10)
+    args = parser.parse_args()
+
+    START_DATE = args.start_date
     ESTIMATION_WINDOW_DAYS = 756
-    COVERAGE_THRESHOLD = 0.95
-    DROP_WORST_K_BY_RETURN_MISSING = 10
+    COVERAGE_THRESHOLD = args.coverage_threshold
+    DROP_WORST_K_BY_RETURN_MISSING = args.drop_worst_k
     RETURN_TYPE = "simple"
 
-    PROJECT_ROOT = Path(__file__).resolve().parents[1]
-    RAW_DIR = PROJECT_ROOT / "data" / "raw" / "sp500_stocks"
-    OUT_DIR = PROJECT_ROOT / "data" / "processed"
+    RAW_DIR = get_raw_dir(args.universe)
+    OUT_DIR = get_processed_dir(args.universe)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     files = sorted(RAW_DIR.glob("*.csv"))
@@ -85,7 +100,7 @@ def main():
     if RETURN_TYPE == "log":
         returns_u = np.log(prices_u).diff()
     elif RETURN_TYPE == "simple":
-        returns_u = prices_u.pct_change()
+        returns_u = prices_u.pct_change(fill_method=None)
     else:
         raise ValueError("RETURN_TYPE must be 'log' or 'simple'")
 

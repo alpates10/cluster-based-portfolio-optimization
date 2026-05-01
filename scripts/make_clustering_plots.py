@@ -15,6 +15,7 @@ Run *after* scripts/run_backtest.py so that the DTW cache exists.
 """
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -38,7 +39,8 @@ from src.clustering.distances import (
     correlation_distance_matrix,
 )
 from src.clustering.representations import raw_return_representation
-from src.clustering.pipeline import _DTW_CACHE_DIR, _make_dtw_cache_key
+from src.clustering.pipeline import _make_dtw_cache_key
+from src.paths import get_returns_path, get_clustering_analysis_dir, get_dtw_cache_dir, UNIVERSE_CHOICES
 
 # ── Configuration ────────────────────────────────────────────────────────────
 TARGET_DATE = "2008-04-01"   # approximate window end; nearest available used
@@ -51,17 +53,13 @@ MDS_N_INIT = 4
 
 
 def _get_sample_window(returns: pd.DataFrame) -> pd.DataFrame:
-    """Return the ESTIMATION_WINDOW trading days ending at or before TARGET_DATE."""
-    target = pd.Timestamp(TARGET_DATE)
-    available = returns.index[returns.index <= target]
-    if len(available) < ESTIMATION_WINDOW:
+    """Return the first ESTIMATION_WINDOW trading days from the start of the data."""
+    if len(returns) < ESTIMATION_WINDOW:
         raise ValueError(
-            f"Not enough data before {TARGET_DATE} for estimation window "
-            f"({len(available)} < {ESTIMATION_WINDOW})"
+            f"Not enough data for estimation window "
+            f"({len(returns)} < {ESTIMATION_WINDOW})"
         )
-    end_idx = returns.index.get_loc(available[-1])
-    start_idx = end_idx - ESTIMATION_WINDOW + 1
-    window = returns.iloc[start_idx : end_idx + 1]
+    window = returns.iloc[:ESTIMATION_WINDOW]
     print(
         f"Sample window: {window.index[0].date()} → {window.index[-1].date()} "
         f"({len(window)} days, {window.shape[1]} assets)"
@@ -155,7 +153,7 @@ def plot_mds(
     ax.set_xlim(xlo, xhi)
     ax.set_ylim(ylo, yhi)
 
-    ax.set_title(f"MDS — {method_label}  k={k}\nwindow ending {TARGET_DATE}")
+    ax.set_title(f"MDS — {method_label}  k={k}")
     ax.set_xlabel("MDS dimension 1")
     ax.set_ylabel("MDS dimension 2")
     ax.legend(loc="best", fontsize=7, markerscale=1.5)
@@ -179,7 +177,7 @@ def plot_silhouette_comparison(
 
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.plot(ks, ss, marker="o", linewidth=2, color="steelblue")
-    ax.set_title(f"Silhouette Score vs k — {method_label}\nwindow ending {TARGET_DATE}")
+    ax.set_title(f"Silhouette Score vs k — {method_label}")
     ax.set_xlabel("Number of clusters (k)")
     ax.set_ylabel("Silhouette score")
     ax.set_xticks(list(ks))
@@ -293,7 +291,7 @@ def plot_mds_comparison_grid(
         _style(ax_loc, f"K-Medoids  k={k}  (local)")
 
     fig.suptitle(
-        f"MDS Clustering Comparison — window ending {TARGET_DATE}",
+        "MDS Clustering Comparison",
         fontsize=14, y=1.01,
     )
     fig.tight_layout()
@@ -307,10 +305,15 @@ def plot_mds_comparison_grid(
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Generate clustering visualisation plots.")
+    parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
+    args = parser.parse_args()
+
     # ── Paths ────────────────────────────────────────────────────────────────
-    returns_path = PROJECT_ROOT / "data" / "processed" / "returns_final.csv"
-    plots_dir = PROJECT_ROOT / "data" / "processed" / "clustering_analysis" / "plots"
+    returns_path = get_returns_path(args.universe)
+    plots_dir = get_clustering_analysis_dir(args.universe) / "plots"
     plots_dir.mkdir(parents=True, exist_ok=True)
+    dtw_cache = get_dtw_cache_dir(args.universe)
 
     # ── Data ─────────────────────────────────────────────────────────────────
     print("Loading returns...")
@@ -318,6 +321,10 @@ def main() -> None:
     window_returns = _get_sample_window(returns)
     asset_matrix = raw_return_representation(window_returns)   # (n_assets, T)
     n_assets = asset_matrix.shape[0]
+
+    # Clip K_VALUES so we never request k > n_assets
+    k_values_plot = [k for k in K_VALUES if k <= n_assets]
+    window_end_str = str(window_returns.index[-1].date())
 
     # ── Distance matrices ─────────────────────────────────────────────────────
     print("\nComputing Euclidean distance matrix (KMeans col 1 visualisation)...")
@@ -331,7 +338,7 @@ def main() -> None:
     dtw_dist = dtw_distance_matrix(
         asset_matrix,
         n_jobs=-1,
-        cache_dir=_DTW_CACHE_DIR,
+        cache_dir=dtw_cache,
         cache_key=cache_key,
     )
 
@@ -351,7 +358,7 @@ def main() -> None:
     km_labels_by_k: dict[int, np.ndarray] = {}
     kmed_labels_by_k: dict[int, np.ndarray] = {}
 
-    for k in K_VALUES:
+    for k in k_values_plot:
         print(f"\n── k={k} ──────────────────────────────────")
 
         # KMeans
@@ -400,13 +407,13 @@ def main() -> None:
     # ── Silhouette comparison plots ───────────────────────────────────────────
     print("\nGenerating silhouette comparison plots...")
     plot_silhouette_comparison(
-        K_VALUES,
+        k_values_plot,
         sil_kmeans,
         method_label="KMeans",
         output_path=plots_dir / "silhouette_comparison_kmeans.png",
     )
     plot_silhouette_comparison(
-        K_VALUES,
+        k_values_plot,
         sil_kmedoids,
         method_label="K-Medoids DTW",
         output_path=plots_dir / "silhouette_comparison_kmedoids.png",
@@ -414,14 +421,14 @@ def main() -> None:
 
     # ── Combined silhouette plot ──────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(K_VALUES, sil_kmeans, marker="o", linewidth=2,
+    ax.plot(k_values_plot, sil_kmeans, marker="o", linewidth=2,
             label="KMeans (euclidean)", color="steelblue")
-    ax.plot(K_VALUES, sil_kmedoids, marker="s", linewidth=2,
+    ax.plot(k_values_plot, sil_kmedoids, marker="s", linewidth=2,
             label="K-Medoids DTW (precomputed)", color="darkorange")
-    ax.set_title(f"Silhouette Score Comparison\nwindow ending {TARGET_DATE}")
+    ax.set_title(f"Silhouette Score Comparison\nwindow ending {window_end_str}")
     ax.set_xlabel("Number of clusters (k)")
     ax.set_ylabel("Silhouette score")
-    ax.set_xticks(K_VALUES)
+    ax.set_xticks(k_values_plot)
     ax.legend()
     ax.grid(True, linestyle="--", alpha=0.5)
     fig.tight_layout()
@@ -432,7 +439,7 @@ def main() -> None:
 
     # ── Large comparison grid (k=1..8, KMeans vs K-Medoids) ──────────────────
     print("\nGenerating MDS comparison grid...")
-    grid_k_values = list(range(1, 9))
+    grid_k_values = [k for k in range(1, 9) if k <= n_assets]
     plot_mds_comparison_grid(
         k_values=grid_k_values,
         mds_eucl=mds_eucl,

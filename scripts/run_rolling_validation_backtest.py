@@ -67,6 +67,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.data.load import load_returns_csv
 from src.backtest.rolling_validation_backtest import run_rolling_validation_backtest
+from src.paths import get_returns_path, get_backtests_dir, get_dtw_cache_dir, UNIVERSE_CHOICES
 
 BACKTEST_BASE = (
     PROJECT_ROOT / "data" / "processed" / "backtests" / "rolling_validation"
@@ -99,10 +100,12 @@ def _run_one(
     method: str,
     weighting: str,
     val_window: int,
+    backtest_base: Path,
+    dtw_cache: str,
     force: bool = False,
 ) -> None:
     name = _strategy_name(method, weighting, val_window)
-    out_dir = BACKTEST_BASE / name
+    out_dir = backtest_base / name
 
     if not force and _all_files_present(out_dir, name):
         tqdm.write(f"[SKIP] {name} — all output files present (use --force to overwrite)")
@@ -124,6 +127,7 @@ def _run_one(
             k_values=[2, 3, 4, 5, 6, 7, 8],
             random_state=42,
             dtw_n_jobs=-1,
+            dtw_cache_dir=dtw_cache,
             show_progress=True,
             progress_desc=name,
         )
@@ -184,10 +188,15 @@ def main() -> None:
             "whose four output CSVs already exist are skipped."
         ),
     )
+    parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
     args = parser.parse_args()
 
-    returns_path = PROJECT_ROOT / "data" / "processed" / "returns_final.csv"
+    backtest_base = get_backtests_dir(args.universe) / "rolling_validation"
+    dtw_cache = get_dtw_cache_dir(args.universe)
+    returns_path = get_returns_path(args.universe)
+
     print(f"Project root : {PROJECT_ROOT}")
+    print(f"Universe     : {args.universe}")
     print(f"Loading returns from: {returns_path}")
     returns = load_returns_csv(returns_path)
     print(f"Returns shape: {returns.shape}")
@@ -209,7 +218,7 @@ def main() -> None:
         print(f"  {_strategy_name(method, weighting, val_window)}")
     print()
 
-    os.makedirs(BACKTEST_BASE, exist_ok=True)
+    os.makedirs(backtest_base, exist_ok=True)
 
     outer_bar = tqdm(
         combos,
@@ -221,7 +230,8 @@ def main() -> None:
     for method, weighting, val_window in outer_bar:
         name = _strategy_name(method, weighting, val_window)
         outer_bar.set_postfix_str(name)
-        _run_one(returns, method, weighting, val_window, force=args.force)
+        _run_one(returns, method, weighting, val_window,
+                 backtest_base=backtest_base, dtw_cache=dtw_cache, force=args.force)
 
     print("\nDone.")
 

@@ -125,6 +125,7 @@ def get_cluster_kmedoids_dtw_equal_weight(
     global_k: int = 5,
     random_state: int = 42,
     dtw_n_jobs: int = -1,
+    dtw_cache_dir: str | None = None,
 ) -> pd.Series:
     labels = cluster_labels_kmedoids_dtw(
         window_returns=window_returns,
@@ -132,6 +133,7 @@ def get_cluster_kmedoids_dtw_equal_weight(
         global_k=global_k,
         random_state=random_state,
         dtw_n_jobs=dtw_n_jobs,
+        cache_dir=dtw_cache_dir or _DTW_CACHE_DIR,
     )
     return _cluster_equal_weight_from_labels(labels, window_returns.columns)
 
@@ -139,6 +141,7 @@ def get_cluster_kmedoids_dtw_equal_weight(
 def get_cluster_kmeans_adaptive_ew(
     window_returns: pd.DataFrame,
     random_state: int = 42,
+    k_max: int | None = None,
 ) -> tuple[pd.Series, dict]:
     """KMeans clustering with adaptive k selection based on silhouette scores.
 
@@ -147,11 +150,13 @@ def get_cluster_kmeans_adaptive_ew(
     (weights, metadata_dict) where metadata_dict contains
     ``selected_k`` (int) and ``silhouette_score`` (float).
     """
+    window_returns = window_returns.loc[:, window_returns.std() > 1e-8]
     asset_matrix = raw_return_representation(window_returns)
     corr_dist = correlation_distance_matrix(asset_matrix)
 
+    k_vals = [k for k in K_VALUES_ADAPTIVE if k_max is None or k <= k_max]
     sil_scores: dict[int, float] = {}
-    for k in K_VALUES_ADAPTIVE:
+    for k in k_vals:
         labels = kmeans_labels(asset_matrix, n_clusters=k, random_state=random_state)
         sil_scores[k] = float(silhouette_score(corr_dist, labels, metric="precomputed"))
 
@@ -166,6 +171,8 @@ def get_cluster_kmedoids_dtw_adaptive_ew(
     window_returns: pd.DataFrame,
     random_state: int = 42,
     dtw_n_jobs: int = -1,
+    dtw_cache_dir: str | None = None,
+    k_max: int | None = None,
 ) -> tuple[pd.Series, dict]:
     """KMedoids-DTW clustering with adaptive k selection based on silhouette scores.
 
@@ -177,17 +184,19 @@ def get_cluster_kmedoids_dtw_adaptive_ew(
     (weights, metadata_dict) where metadata_dict contains
     ``selected_k`` (int) and ``silhouette_score`` (float).
     """
+    window_returns = window_returns.loc[:, window_returns.std() > 1e-8]
     asset_matrix = raw_return_representation(window_returns)
     cache_key = _make_dtw_cache_key_for_window(window_returns)
     dtw_dist = dtw_distance_matrix(
         asset_matrix,
         n_jobs=dtw_n_jobs,
-        cache_dir=_DTW_CACHE_DIR,
+        cache_dir=dtw_cache_dir or _DTW_CACHE_DIR,
         cache_key=cache_key,
     )
 
+    k_vals = [k for k in K_VALUES_ADAPTIVE if k_max is None or k <= k_max]
     sil_scores: dict[int, float] = {}
-    for k in K_VALUES_ADAPTIVE:
+    for k in k_vals:
         labels = kmedoids_labels_from_distance(dtw_dist, n_clusters=k, random_state=random_state)
         sil_scores[k] = float(silhouette_score(dtw_dist, labels, metric="precomputed"))
 

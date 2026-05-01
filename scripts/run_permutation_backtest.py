@@ -33,8 +33,15 @@ from __future__ import annotations
 import argparse
 import os
 import time
+import warnings
 from pathlib import Path
 import sys
+
+warnings.filterwarnings(
+    "ignore",
+    message="n_clusters should be larger than 2",
+    category=UserWarning,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -45,6 +52,7 @@ from tqdm import tqdm
 from src.data.load import load_returns_csv
 from src.backtest.rolling import run_rolling_backtest
 from src.backtest.permutation_backtest import make_permuted_strategy
+from src.paths import get_returns_path, get_backtests_dir, UNIVERSE_CHOICES
 
 K_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30, 50]
 
@@ -60,8 +68,8 @@ def _strategy_name(method: str, k: int, seed: int) -> str:
     return f"{_METHOD_PREFIX[method]}_k{k}_seed{seed:04d}"
 
 
-def _output_dir(method: str, k: int, seed: int) -> Path:
-    return PERM_ROOT / _strategy_name(method, k, seed)
+def _output_dir(method: str, k: int, seed: int, perm_root: Path = PERM_ROOT) -> Path:
+    return perm_root / _strategy_name(method, k, seed)
 
 
 def _already_done(out_dir: Path, name: str) -> bool:
@@ -78,9 +86,10 @@ def _run_one(
     method: str,
     k: int,
     seed: int,
+    perm_root: Path = PERM_ROOT,
 ) -> None:
     name    = _strategy_name(method, k, seed)
-    out_dir = _output_dir(method, k, seed)
+    out_dir = _output_dir(method, k, seed, perm_root)
 
     if _already_done(out_dir, name):
         tqdm.write(f"[SKIP] {name} — already complete")
@@ -97,8 +106,6 @@ def _run_one(
         dtw_n_jobs=-1,
     )
 
-    is_kmedoids = method == "kmedoids"
-
     t0 = time.perf_counter()
     try:
         portfolio_returns, weights_history, _ = run_rolling_backtest(
@@ -107,8 +114,8 @@ def _run_one(
             estimation_window=756,
             show_progress=True,
             progress_desc=name,
-            detailed_progress=is_kmedoids,
-            heartbeat_seconds=30 if is_kmedoids else None,
+            detailed_progress=False,
+            heartbeat_seconds=None,
         )
     except Exception as exc:
         tqdm.write(f"\n[ERROR] {name} failed — skipping. Reason: {exc}")
@@ -148,23 +155,29 @@ def main() -> None:
         default=None,
         help="Override K_VALUES (e.g. --k_values 3 5 10). Default: all K_VALUES.",
     )
+    parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
     args = parser.parse_args()
 
     methods = ["kmeans", "kmedoids"] if args.method == "both" else [args.method]
-    k_values = args.k_values if args.k_values else K_VALUES
     seeds = list(range(args.n_seeds))
 
+    returns_path = get_returns_path(args.universe)
+    # Load returns first so we can clip k_values to the universe size
+    returns = load_returns_csv(returns_path)
+    n_tickers = returns.shape[1]
+    base_k_values = args.k_values if args.k_values else K_VALUES
+    k_values = [k for k in base_k_values if k <= n_tickers]
+
     project_root = Path(__file__).resolve().parents[1]
-    returns_path = project_root / "data" / "processed" / "returns_final.csv"
-    os.makedirs(PERM_ROOT, exist_ok=True)
+    perm_root = get_backtests_dir(args.universe) / "permutation_test"
+    os.makedirs(perm_root, exist_ok=True)
 
     print(f"Project root : {project_root}")
+    print(f"Universe     : {args.universe}")
     print(f"Methods      : {methods}")
     print(f"K_VALUES     : {k_values}")
     print(f"Seeds        : {seeds}")
     print(f"Total runs   : {len(methods) * len(k_values) * len(seeds)}")
-
-    returns = load_returns_csv(returns_path)
 
     combos = [
         (method, k, seed)
@@ -176,7 +189,7 @@ def main() -> None:
     outer_bar = tqdm(combos, desc="Permutation backtests", unit="run", dynamic_ncols=True)
     for method, k, seed in outer_bar:
         outer_bar.set_postfix_str(f"{method} k={k} seed={seed}")
-        _run_one(returns, method, k, seed)
+        _run_one(returns, method, k, seed, perm_root=perm_root)
 
 
 if __name__ == "__main__":

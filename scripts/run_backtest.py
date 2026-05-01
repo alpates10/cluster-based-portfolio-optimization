@@ -12,6 +12,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.paths import get_returns_path, get_backtests_dir, get_dtw_cache_dir, UNIVERSE_CHOICES
+
 from src.data.load import load_returns_csv
 from src.optimizers.equal_weight import get_equal_weight
 from src.optimizers.mean_variance import get_mean_variance_weights
@@ -106,7 +108,7 @@ def _rename_old_folders(base_out_dir: Path) -> None:
             print(f"Removed duplicate legacy folder: {name}/")
 
 
-def _build_strategies(mode: str) -> dict:
+def _build_strategies(mode: str, dtw_cache: str, k_values: list, k_max: int) -> dict:
     strategies: dict = {}
 
     if mode in ("classical", "all"):
@@ -116,7 +118,7 @@ def _build_strategies(mode: str) -> dict:
         #strategies["cvar"] = get_cvar_weights
 
     if mode in ("kmeans", "all"):
-        for k in K_VALUES:
+        for k in k_values:
             strategies[f"kmeans_k{k}"] = partial(
                 get_cluster_kmeans_equal_weight,
                 global_k=k,
@@ -124,23 +126,27 @@ def _build_strategies(mode: str) -> dict:
             )
 
     if mode in ("kmedoids", "all"):
-        for k in K_VALUES:
+        for k in k_values:
             strategies[f"kmedoids_dtw_k{k}"] = partial(
                 get_cluster_kmedoids_dtw_equal_weight,
                 global_k=k,
                 random_state=42,
                 dtw_n_jobs=-1,
+                dtw_cache_dir=dtw_cache,
             )
 
     if mode in ("adaptive", "all"):
         strategies["kmeans_adaptive_ew"] = partial(
             get_cluster_kmeans_adaptive_ew,
             random_state=42,
+            k_max=k_max,
         )
         strategies["kmedoids_dtw_adaptive_ew"] = partial(
             get_cluster_kmedoids_dtw_adaptive_ew,
             random_state=42,
             dtw_n_jobs=-1,
+            dtw_cache_dir=dtw_cache,
+            k_max=k_max,
         )
 
     # ── Fixed-k Markowitz strategies ──────────────────────────────────────────
@@ -157,38 +163,39 @@ def _build_strategies(mode: str) -> dict:
 
     if mode in ("kmeans_markowitz", "all"):
         for family, func in _KMEANS_MARKOWITZ_FUNCS.items():
-            for k in K_VALUES:
+            for k in k_values:
                 strategies[f"{family}_k{k}"] = partial(func, global_k=k, random_state=42)
 
     if mode in ("kmedoids_markowitz", "all"):
         for family, func in _KMEDOIDS_MARKOWITZ_FUNCS.items():
-            for k in K_VALUES:
+            for k in k_values:
                 strategies[f"{family}_k{k}"] = partial(
-                    func, global_k=k, random_state=42, dtw_n_jobs=-1
+                    func, global_k=k, random_state=42, dtw_n_jobs=-1,
+                    dtw_cache_dir=dtw_cache,
                 )
 
     # ── Adaptive Markowitz strategies ─────────────────────────────────────────
     if mode in ("adaptive_markowitz", "all"):
         strategies["kmeans_adaptive_markowitz_inter_ew_intra"] = partial(
-            get_cluster_kmeans_adaptive_markowitz_inter_ew_intra, random_state=42
+            get_cluster_kmeans_adaptive_markowitz_inter_ew_intra, random_state=42, k_max=k_max
         )
         strategies["kmeans_adaptive_ew_inter_markowitz_intra"] = partial(
-            get_cluster_kmeans_adaptive_ew_inter_markowitz_intra, random_state=42
+            get_cluster_kmeans_adaptive_ew_inter_markowitz_intra, random_state=42, k_max=k_max
         )
         strategies["kmeans_adaptive_markowitz_inter_markowitz_intra"] = partial(
-            get_cluster_kmeans_adaptive_markowitz_inter_markowitz_intra, random_state=42
+            get_cluster_kmeans_adaptive_markowitz_inter_markowitz_intra, random_state=42, k_max=k_max
         )
         strategies["kmedoids_dtw_adaptive_markowitz_inter_ew_intra"] = partial(
             get_cluster_kmedoids_dtw_adaptive_markowitz_inter_ew_intra,
-            random_state=42, dtw_n_jobs=-1,
+            random_state=42, dtw_n_jobs=-1, dtw_cache_dir=dtw_cache, k_max=k_max,
         )
         strategies["kmedoids_dtw_adaptive_ew_inter_markowitz_intra"] = partial(
             get_cluster_kmedoids_dtw_adaptive_ew_inter_markowitz_intra,
-            random_state=42, dtw_n_jobs=-1,
+            random_state=42, dtw_n_jobs=-1, dtw_cache_dir=dtw_cache, k_max=k_max,
         )
         strategies["kmedoids_dtw_adaptive_markowitz_inter_markowitz_intra"] = partial(
             get_cluster_kmedoids_dtw_adaptive_markowitz_inter_markowitz_intra,
-            random_state=42, dtw_n_jobs=-1,
+            random_state=42, dtw_n_jobs=-1, dtw_cache_dir=dtw_cache, k_max=k_max,
         )
 
     return strategies
@@ -227,20 +234,34 @@ def main():
             "all → everything (default)"
         ),
     )
+    parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
+    parser.add_argument(
+        "--skip-strategies",
+        default="",
+        help="Comma-separated list of strategy names to skip.",
+    )
     args = parser.parse_args()
+
+    skip_set = {s.strip() for s in args.skip_strategies.split(",") if s.strip()}
 
     project_root = Path(__file__).resolve().parents[1]
     print(f"Project root : {project_root}")
     print(f"Mode         : {args.mode}")
+    print(f"Universe     : {args.universe}")
+    if skip_set:
+        print(f"Skipping     : {', '.join(sorted(skip_set))}")
 
-    returns_path = project_root / "data" / "processed" / "returns_final.csv"
-    base_out_dir = project_root / "data" / "processed" / "backtests"
+    returns_path = get_returns_path(args.universe)
+    base_out_dir = get_backtests_dir(args.universe)
     os.makedirs(base_out_dir, exist_ok=True)
 
     _rename_old_folders(base_out_dir)
 
     returns = load_returns_csv(returns_path)
-    strategies = _build_strategies(args.mode)
+    n_tickers = returns.shape[1]
+    k_values = [k for k in K_VALUES if k <= n_tickers]
+    k_max = n_tickers - 1
+    strategies = _build_strategies(args.mode, get_dtw_cache_dir(args.universe), k_values, k_max)
 
     strategy_items = list(strategies.items())
     outer_bar = tqdm(
@@ -254,6 +275,10 @@ def main():
         outer_bar.set_postfix_str(strategy_name)
         out_dir = _strategy_out_dir(base_out_dir, strategy_name)
 
+        if strategy_name in skip_set:
+            tqdm.write(f"[SKIP] {strategy_name} — excluded via --skip-strategies")
+            continue
+
         # Skip if all 3 output files already exist
         if _already_done(base_out_dir, strategy_name):
             tqdm.write(f"[SKIP] {strategy_name} — already complete")
@@ -261,8 +286,6 @@ def main():
 
         tqdm.write(f"\n>>> {strategy_name}")
         os.makedirs(out_dir, exist_ok=True)
-
-        is_kmedoids = "kmedoids" in strategy_name
 
         t0 = time.perf_counter()
         try:
@@ -272,8 +295,8 @@ def main():
                 estimation_window=756,
                 show_progress=True,
                 progress_desc=strategy_name,
-                detailed_progress=is_kmedoids,
-                heartbeat_seconds=30 if is_kmedoids else None,
+                detailed_progress=False,
+                heartbeat_seconds=None,
             )
         except Exception as exc:
             tqdm.write(f"\n[ERROR] {strategy_name} failed — skipping. Reason: {exc}")

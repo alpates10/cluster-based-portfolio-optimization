@@ -89,13 +89,14 @@ def _get_labels_kmedoids(
     global_k: int,
     random_state: int,
     dtw_n_jobs: int = -1,
+    dtw_cache_dir: str | None = None,
 ) -> np.ndarray:
     asset_matrix = raw_return_representation(window_returns)
     cache_key    = _make_dtw_cache_key(window_returns)
     dtw_dist     = dtw_distance_matrix(
         asset_matrix,
         n_jobs=dtw_n_jobs,
-        cache_dir=_DTW_CACHE_DIR,
+        cache_dir=dtw_cache_dir or _DTW_CACHE_DIR,
         cache_key=cache_key,
     )
     return kmedoids_labels_from_distance(
@@ -237,8 +238,9 @@ def get_cluster_kmedoids_dtw_markowitz_inter_ew_intra(
     global_k: int = 5,
     random_state: int = 42,
     dtw_n_jobs: int = -1,
+    dtw_cache_dir: str | None = None,
 ) -> pd.Series:
-    labels = _get_labels_kmedoids(window_returns, global_k, random_state, dtw_n_jobs)
+    labels = _get_labels_kmedoids(window_returns, global_k, random_state, dtw_n_jobs, dtw_cache_dir)
     return _markowitz_inter_ew_intra(window_returns, labels)
 
 
@@ -247,8 +249,9 @@ def get_cluster_kmedoids_dtw_ew_inter_markowitz_intra(
     global_k: int = 5,
     random_state: int = 42,
     dtw_n_jobs: int = -1,
+    dtw_cache_dir: str | None = None,
 ) -> pd.Series:
-    labels = _get_labels_kmedoids(window_returns, global_k, random_state, dtw_n_jobs)
+    labels = _get_labels_kmedoids(window_returns, global_k, random_state, dtw_n_jobs, dtw_cache_dir)
     return _ew_inter_markowitz_intra(window_returns, labels)
 
 
@@ -257,6 +260,7 @@ def get_cluster_kmedoids_dtw_markowitz_inter_markowitz_intra(
     global_k: int = 5,
     random_state: int = 42,
     dtw_n_jobs: int = -1,
+    dtw_cache_dir: str | None = None,
 ) -> pd.Series:
-    labels = _get_labels_kmedoids(window_returns, global_k, random_state, dtw_n_jobs)
+    labels = _get_labels_kmedoids(window_returns, global_k, random_state, dtw_n_jobs, dtw_cache_dir)
     return _markowitz_inter_markowitz_intra(window_returns, labels)

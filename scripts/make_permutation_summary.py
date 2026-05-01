@@ -55,8 +55,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.metrics.performance import compute_performance_metrics
+from src.paths import get_backtests_dir, UNIVERSE_CHOICES
 
-# ── Paths ─────────────────────────────────────────────────────────────────────
+# ── Paths — overridden inside main() via global ────────────────────────────────
 
 PERM_TEST_ROOT   = PROJECT_ROOT / "data" / "processed" / "backtests" / "permutation_test"
 BACKTESTS_ROOT   = PROJECT_ROOT / "data" / "processed" / "backtests"
@@ -479,7 +480,14 @@ def main() -> None:
         default=None,
         help="Only process these k values (default: all discovered).",
     )
+    parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
     args = parser.parse_args()
+
+    global PERM_TEST_ROOT, BACKTESTS_ROOT, SUMMARY_ROOT
+    backtests_dir = get_backtests_dir(args.universe)
+    PERM_TEST_ROOT = backtests_dir / "permutation_test"
+    BACKTESTS_ROOT = backtests_dir
+    SUMMARY_ROOT   = backtests_dir / "summary" / "permutation_summary" / "ew_inter_markowitz_intra"
 
     methods = ["kmeans", "kmedoids"] if args.method == "both" else [args.method]
 
