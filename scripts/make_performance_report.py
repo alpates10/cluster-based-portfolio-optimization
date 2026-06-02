@@ -2,7 +2,7 @@
 Performance report generator.
 
 --mode classical  (default)
-    Reads equal_weight / mean_variance / gmv / cvar strategy folders.
+    Reads equal_weight / mean_variance / gmv strategy folders.
     Writes outputs to data/processed/backtests/summary/classical/
 
 --mode clustering
@@ -54,7 +54,7 @@ from src.metrics.performance import compute_performance_metrics
 from src.paths import get_backtests_dir, UNIVERSE_CHOICES
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-CLASSICAL_NAMES = {"equal_weight", "mean_variance", "gmv", "cvar"}
+CLASSICAL_NAMES = {"equal_weight", "mean_variance", "gmv"}
 CLUSTERING_PARENTS = ["kmeans_equal_weight", "kmedoids_dtw_equal_weight"]
 ADAPTIVE_STRATEGY_NAMES = {"kmeans_adaptive_ew", "kmedoids_dtw_adaptive_ew"}
 ROLLING_WINDOW_MONTHS = 12
@@ -322,7 +322,7 @@ def _build_and_save_aligned(
 
 def _strategy_group_color(name: str) -> str | None:
     """Return the pastel hex fill color for a strategy, or None if unmatched."""
-    if name in {"equal_weight", "mean_variance", "gmv", "cvar"}:
+    if name in {"equal_weight", "mean_variance", "gmv"}:
         return "D9D9D9"
     if name.startswith("kmeans_k"):
         return "C9B8E8"
@@ -572,7 +572,7 @@ def main() -> None:
         ],
         default="classical",
         help=(
-            "classical (default) → equal_weight/mean_variance/gmv/cvar → summary/classical/; "
+            "classical (default) → equal_weight/mean_variance/gmv → summary/classical/; "
             "clustering → kmeans_k*/kmedoids_dtw_k* → summary/clustering/; "
             "rolling_validation → rolling_validation/* → summary/rolling_validation/; "
             "all → classical+clustering+rolling_validation aligned to 12m start → summary/all/; "

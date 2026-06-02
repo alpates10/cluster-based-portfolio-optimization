@@ -18,7 +18,6 @@ from src.data.load import load_returns_csv
 from src.optimizers.equal_weight import get_equal_weight
 from src.optimizers.mean_variance import get_mean_variance_weights
 from src.optimizers.gmv import get_gmv_weights
-from src.optimizers.cvar import get_cvar_weights
 from src.optimizers.cluster_equal_weight import (
     get_cluster_kmeans_equal_weight,
     get_cluster_kmedoids_dtw_equal_weight,
@@ -45,7 +44,7 @@ from src.backtest.rolling import run_rolling_backtest
 
 K_VALUES = [2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30, 50]
 
-CLASSICAL_NAMES = {"equal_weight", "mean_variance", "gmv", "cvar"}
+CLASSICAL_NAMES = {"equal_weight", "mean_variance", "gmv"}
 
 
 # ── Fixed-k Markowitz strategy families ──────────────────────────────────────
@@ -115,7 +114,6 @@ def _build_strategies(mode: str, dtw_cache: str, k_values: list, k_max: int) -> 
         strategies["equal_weight"] = get_equal_weight
         strategies["mean_variance"] = get_mean_variance_weights
         strategies["gmv"] = get_gmv_weights
-        #strategies["cvar"] = get_cvar_weights
 
     if mode in ("kmeans", "all"):
         for k in k_values:
@@ -224,7 +222,7 @@ def main():
         ],
         default="all",
         help=(
-            "classical → equal_weight/mean_variance/gmv/cvar only; "
+            "classical → equal_weight/mean_variance/gmv only; "
             "kmeans → kmeans_k2..k8 (equal-weight); "
             "kmedoids → kmedoids_dtw_k2..k8 (equal-weight); "
             "adaptive → adaptive equal-weight (kmeans + kmedoids); "
