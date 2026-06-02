@@ -2,7 +2,7 @@
 
 A systematic rolling-backtest framework comparing **clustering-based portfolio strategies** against classical optimization methods across four equity universes (S&P 500, BIST 100, NIFTY 50, SSE) over a 17-year out-of-sample period (2008–2025).
 
-This is the codebase for my undergraduate thesis at Galatasaray University (INF494).
+This is the codebase for my undergraduate thesis at Galatasaray University.
 
 ---
 
