@@ -124,7 +124,7 @@ def _run_one(
             weighting_method=weighting,
             val_window=val_window,
             estimation_window=756,
-            k_values=[2, 3, 4, 5, 6, 7, 8],
+            k_values=[2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 30, 50],
             random_state=42,
             dtw_n_jobs=-1,
             dtw_cache_dir=dtw_cache,

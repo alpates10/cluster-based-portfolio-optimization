@@ -12,8 +12,13 @@ __pycache__/
 .ipynb_checkpoints/
 
 # data
-data/raw
-data/processed
+data/
+
+# output
+graphify-out/
+
+# generated graphics
+src/analysis/report_graphics.py
 
 # experiments
 experiments/plots

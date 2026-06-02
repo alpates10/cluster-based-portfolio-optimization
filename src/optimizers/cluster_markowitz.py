@@ -56,7 +56,7 @@ def _markowitz_or_ew(window_returns: pd.DataFrame) -> pd.Series:
         )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            ef.max_sharpe(risk_free_rate=0.01)
+            ef.max_sharpe(risk_free_rate=0.0)
         w = pd.Series(ef.weights, index=window_returns.columns, dtype="float64")
         w = w.clip(lower=0.0)
         total = w.sum()
