@@ -77,13 +77,43 @@ BACKTEST_BASE = (
 # ── Naming helpers ────────────────────────────────────────────────────────────
 
 def _strategy_name(method: str, weighting: str, val_window: int) -> str:
-    """Return the canonical strategy name string."""
+    """Return the canonical strategy name string.
+
+    Parameters
+    ----------
+    method : str
+        Clustering method, either ``"kmeans"`` or ``"kmedoids"``.
+    weighting : str
+        Portfolio weighting scheme, either ``"ew"`` (equal-weight) or
+        ``"mv"`` (mean-variance).
+    val_window : int
+        Validation window length in months (e.g. ``3``, ``6``, ``12``).
+
+    Returns
+    -------
+    str
+        Strategy name, e.g. ``"kmeans_rolling_val_ew_6m"``.
+    """
     prefix = "kmeans" if method == "kmeans" else "kmedoids_dtw"
     return f"{prefix}_rolling_val_{weighting}_{val_window}m"
 
 
 def _all_files_present(out_dir: Path, name: str) -> bool:
-    """Return True if all four output files already exist (checkpoint)."""
+    """Return True if all four output files already exist (checkpoint).
+
+    Parameters
+    ----------
+    out_dir : Path
+        Output directory for this strategy.
+    name : str
+        Canonical strategy name used to construct expected file names.
+
+    Returns
+    -------
+    bool
+        ``True`` if all four CSVs (daily returns, monthly returns,
+        weights, selected_k) are present in ``out_dir``.
+    """
     required = [
         f"{name}_daily_portfolio_returns.csv",
         f"{name}_monthly_portfolio_returns.csv",
@@ -104,6 +134,26 @@ def _run_one(
     dtw_cache: str,
     force: bool = False,
 ) -> None:
+    """Run one rolling-validation backtest strategy and save its CSV outputs.
+
+    Parameters
+    ----------
+    returns : pd.DataFrame
+        Full daily return matrix for the universe.
+    method : str
+        Clustering method, either ``"kmeans"`` or ``"kmedoids"``.
+    weighting : str
+        Portfolio weighting scheme, either ``"ew"`` or ``"mv"``.
+    val_window : int
+        Number of past rebalance periods used to score candidate k values.
+    backtest_base : Path
+        Root directory for rolling-validation strategy outputs.
+    dtw_cache : str
+        Path to the DTW distance-matrix cache directory.
+    force : bool, optional
+        If ``True``, overwrite existing output files; otherwise skip
+        strategies whose four output CSVs are already present.
+    """
     name = _strategy_name(method, weighting, val_window)
     out_dir = backtest_base / name
 
@@ -154,6 +204,7 @@ def _run_one(
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    """Parse CLI arguments and run requested rolling-validation backtests."""
     parser = argparse.ArgumentParser(
         description="Run rolling-validation k-selection backtests."
     )

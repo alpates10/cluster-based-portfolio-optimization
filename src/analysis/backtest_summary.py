@@ -18,6 +18,24 @@ _MONTHLY_CANDIDATES = (
 
 
 def _load_return_series(csv_path: Path) -> pd.Series:
+    """
+    Load and validate a return series from a CSV file.
+
+    Parameters
+    ----------
+    csv_path : Path
+        Path to the return CSV file.
+
+    Returns
+    -------
+    pd.Series
+        Portfolio return series sorted by date and converted to float64.
+
+    Raises
+    ------
+    ValueError
+        If the file is empty or contains NaN/non-numeric values.
+    """
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     if df.empty:
         raise ValueError(f"Return file is empty: {csv_path}")
@@ -37,6 +55,26 @@ def _load_return_series(csv_path: Path) -> pd.Series:
 
 
 def _find_returns_file(strategy_dir: Path, strategy_name: str, frequency: str) -> Path | None:
+    """
+    Find the return CSV file for a requested frequency inside a strategy directory.
+
+    Known candidate filenames are checked first; if none match, a glob pattern
+    is used as a fallback.
+
+    Parameters
+    ----------
+    strategy_dir : Path
+        Strategy output directory.
+    strategy_name : str
+        Strategy name, expected to match the directory name.
+    frequency : str
+        'daily' or 'monthly'.
+
+    Returns
+    -------
+    Path | None
+        Matching file path, or None when no file is found.
+    """
     if frequency == "daily":
         name_candidates = [n.format(strategy=strategy_name) for n in _DAILY_CANDIDATES]
         glob_pattern = "*_daily_portfolio_returns.csv"
@@ -59,14 +97,48 @@ def _find_returns_file(strategy_dir: Path, strategy_name: str, frequency: str) -
 
 
 def list_strategy_directories(backtests_root: Path) -> list[Path]:
+    """
+    List all strategy subdirectories under the backtest root in alphabetical order.
+
+    Parameters
+    ----------
+    backtests_root : Path
+        Root directory containing strategy directories.
+
+    Returns
+    -------
+    list[Path]
+        Sorted strategy directory list, excluding hidden directories.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the root directory does not exist.
+    """
     if not backtests_root.exists():
         raise FileNotFoundError(f"Backtests directory not found: {backtests_root}")
 
-    strategy_dirs = [p for p in backtests_root.iterdir() if p.is_dir() and not p.name.startswith(".")]
+    strategy_dirs = [
+        p for p in backtests_root.iterdir()
+        if p.is_dir() and not p.name.startswith(".")
+    ]
     return sorted(strategy_dirs, key=lambda p: p.name)
 
 
 def _build_monthly_from_daily(daily_returns: pd.Series) -> pd.Series:
+    """
+    Convert daily returns to compounded monthly returns.
+
+    Parameters
+    ----------
+    daily_returns : pd.Series
+        Daily portfolio return series.
+
+    Returns
+    -------
+    pd.Series
+        Monthly compounded return series with NaN values removed.
+    """
     monthly_returns = (1.0 + daily_returns).resample("M").prod() - 1.0
     monthly_returns = monthly_returns.dropna().astype("float64")
     monthly_returns.name = "portfolio_return"
@@ -74,6 +146,27 @@ def _build_monthly_from_daily(daily_returns: pd.Series) -> pd.Series:
 
 
 def load_strategy_monthly_returns(strategy_dir: Path) -> tuple[pd.Series, str]:
+    """
+    Load a monthly return series from a strategy directory.
+
+    The monthly CSV is preferred; if it is unavailable, monthly returns are
+    compounded from the daily CSV.
+
+    Parameters
+    ----------
+    strategy_dir : Path
+        Strategy output directory.
+
+    Returns
+    -------
+    tuple[pd.Series, str]
+        Monthly return series and a log message describing the data source.
+
+    Raises
+    ------
+    FileNotFoundError
+        If neither monthly nor daily return files can be found.
+    """
     strategy_name = strategy_dir.name
 
     monthly_path = _find_returns_file(strategy_dir, strategy_name, frequency="monthly")
@@ -93,6 +186,24 @@ def load_strategy_monthly_returns(strategy_dir: Path) -> tuple[pd.Series, str]:
 
 
 def load_strategy_daily_returns(strategy_dir: Path) -> tuple[pd.Series, str]:
+    """
+    Load a daily return series from a strategy directory.
+
+    Parameters
+    ----------
+    strategy_dir : Path
+        Strategy output directory.
+
+    Returns
+    -------
+    tuple[pd.Series, str]
+        Daily return series and a log message describing the data source.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no daily return CSV can be found.
+    """
     strategy_name = strategy_dir.name
     daily_path = _find_returns_file(strategy_dir, strategy_name, frequency="daily")
     if daily_path is None:
@@ -105,7 +216,16 @@ def load_strategy_daily_returns(strategy_dir: Path) -> tuple[pd.Series, str]:
 def load_strategy_monthly_returns_direct(strategy_dir: Path) -> pd.Series | None:
     """Load monthly returns from the monthly CSV file only; no daily aggregation fallback.
 
-    Returns None if no monthly file exists or the file cannot be loaded.
+    Parameters
+    ----------
+    strategy_dir : Path
+        Strategy output directory containing the monthly return CSV.
+
+    Returns
+    -------
+    pd.Series | None
+        Monthly return series, or None if no monthly file exists or the
+        file cannot be loaded.
     """
     strategy_name = strategy_dir.name
     monthly_path = _find_returns_file(strategy_dir, strategy_name, frequency="monthly")
@@ -117,7 +237,23 @@ def load_strategy_monthly_returns_direct(strategy_dir: Path) -> pd.Series | None
         return None
 
 
-def load_strategy_returns(strategy_dir: Path) -> tuple[pd.Series | None, pd.Series | None, list[str]]:
+def load_strategy_returns(
+    strategy_dir: Path,
+) -> tuple[pd.Series | None, pd.Series | None, list[str]]:
+    """
+    Try to load both daily and monthly return series from a strategy directory.
+
+    Parameters
+    ----------
+    strategy_dir : Path
+        Strategy output directory.
+
+    Returns
+    -------
+    tuple[pd.Series | None, pd.Series | None, list[str]]
+        Daily returns, monthly returns, and source/error log messages. Any
+        unavailable series is returned as None.
+    """
     logs: list[str] = []
 
     daily_returns: pd.Series | None = None
@@ -142,6 +278,22 @@ def build_monthly_returns_comparison_table(
     backtests_root: Path,
     strategy_dirs: list[Path] | None = None,
 ) -> tuple[pd.DataFrame, list[str]]:
+    """
+    Build a comparison table that combines monthly returns for all strategies.
+
+    Parameters
+    ----------
+    backtests_root : Path
+        Root directory containing strategy directories.
+    strategy_dirs : list[Path] | None
+        Strategy directories to process; if None, the root directory is scanned.
+
+    Returns
+    -------
+    tuple[pd.DataFrame, list[str]]
+        Comparison table and log messages. Each column is a strategy and each
+        row is a month.
+    """
     monthly_series_by_strategy: dict[str, pd.Series] = {}
     skipped_messages: list[str] = []
 
@@ -171,6 +323,24 @@ def build_summary_metrics_table(
     risk_free_rate: float = 0.0,
     strategy_dirs: list[Path] | None = None,
 ) -> tuple[pd.DataFrame, list[str]]:
+    """
+    Build a summary table by computing performance metrics for all strategies.
+
+    Parameters
+    ----------
+    backtests_root : Path
+        Root directory containing strategy directories.
+    risk_free_rate : float
+        Annual risk-free rate used in Sharpe ratio calculation.
+    strategy_dirs : list[Path] | None
+        Strategy directories to process; if None, the root directory is scanned.
+
+    Returns
+    -------
+    tuple[pd.DataFrame, list[str]]
+        Summary table and log messages. The table includes annualized return,
+        volatility, Sharpe ratio, maximum drawdown, and Calmar ratio.
+    """
     rows: list[dict] = []
     logs: list[str] = []
 
@@ -259,6 +429,21 @@ def build_rolling_sharpe_comparison_table(
     monthly_returns_comparison: pd.DataFrame,
     window_months: int = 12,
 ) -> pd.DataFrame:
+    """
+    Compute rolling-window Sharpe ratios from a monthly returns comparison table.
+
+    Parameters
+    ----------
+    monthly_returns_comparison : pd.DataFrame
+        Monthly returns table where each column is a strategy.
+    window_months : int
+        Rolling Sharpe window length in months.
+
+    Returns
+    -------
+    pd.DataFrame
+        Rolling annualized Sharpe ratios for each strategy.
+    """
     if monthly_returns_comparison.empty:
         return pd.DataFrame()
 
@@ -275,20 +460,48 @@ def build_rolling_sharpe_comparison_table(
 
 
 def save_monthly_returns_comparison_table(comparison_df: pd.DataFrame, output_path: Path) -> None:
+    """
+    Save the monthly returns comparison table to a CSV file.
+
+    Parameters
+    ----------
+    comparison_df : pd.DataFrame
+        Comparison table to save.
+    output_path : Path
+        Target CSV path; parent directories are created automatically.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     comparison_df.to_csv(output_path, index=True, index_label="date")
 
 
 def save_summary_metrics_table(summary_df: pd.DataFrame, output_path: Path) -> None:
+    """
+    Save the summary metrics table to a CSV file.
+
+    Parameters
+    ----------
+    summary_df : pd.DataFrame
+        Summary metrics table to save.
+    output_path : Path
+        Target CSV path; parent directories are created automatically.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     summary_df.to_csv(output_path, index=False)
 
 
 def save_summary_metrics_excel(summary_df: pd.DataFrame, output_path: Path) -> None:
-    """
-    Save summary metrics to a color-formatted Excel file.
+    """Save summary metrics to a color-formatted Excel file.
 
-    Green = better, Red = worse.
+    Numeric metric columns are highlighted green (better) or red (worse)
+    using a RdYlGn background gradient.
+
+    Parameters
+    ----------
+    summary_df : pd.DataFrame
+        Summary metrics table as returned by build_summary_metrics_table.
+    output_path : Path
+        Target Excel path (.xlsx); parent directories are created
+        automatically.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -330,6 +543,18 @@ def save_summary_metrics_excel(summary_df: pd.DataFrame, output_path: Path) -> N
     styler.to_excel(output_path, index=False, sheet_name="summary_metrics")
 
 
-def save_rolling_sharpe_comparison_table(rolling_sharpe_df: pd.DataFrame, output_path: Path) -> None:
+def save_rolling_sharpe_comparison_table(
+    rolling_sharpe_df: pd.DataFrame, output_path: Path
+) -> None:
+    """
+    Save the rolling Sharpe comparison table to a CSV file.
+
+    Parameters
+    ----------
+    rolling_sharpe_df : pd.DataFrame
+        Rolling Sharpe table to save.
+    output_path : Path
+        Target CSV path; parent directories are created automatically.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     rolling_sharpe_df.to_csv(output_path, index=True, index_label="date")

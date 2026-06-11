@@ -30,7 +30,6 @@ def get_mean_variance_weights(window_returns: pd.DataFrame) -> pd.Series:
         solver="SCS",
     )
 
-    #ef.max_quadratic_utility(risk_aversion=1.0)
     ef.max_sharpe(risk_free_rate=0.0)
     
     weights = pd.Series(ef.weights, index=window_returns.columns, dtype="float64")

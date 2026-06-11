@@ -80,6 +80,20 @@ _COLOR_RANDOM_MEAN = "FCE4D6"   # orange
 # ── Data loading ──────────────────────────────────────────────────────────────
 
 def _load_daily(csv_path: Path) -> pd.Series:
+    """Load a daily portfolio-return CSV as a float64 Series.
+
+    Parameters
+    ----------
+    csv_path : Path
+        Path to a strategy CSV with a date index and a
+        ``portfolio_return`` column (or any single numeric column).
+
+    Returns
+    -------
+    pd.Series
+        Float64 return series sorted by date, named
+        ``"portfolio_return"``.
+    """
     df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
     col = "portfolio_return" if "portfolio_return" in df.columns else df.columns[0]
     s = pd.to_numeric(df[col], errors="coerce").sort_index().astype("float64")
@@ -88,21 +102,73 @@ def _load_daily(csv_path: Path) -> pd.Series:
 
 
 def _load_monthly(csv_path: Path) -> pd.Series:
+    """Load a monthly portfolio-return CSV as a float64 Series.
+
+    Parameters
+    ----------
+    csv_path : Path
+        Path to a monthly return CSV produced by the backtest pipeline.
+
+    Returns
+    -------
+    pd.Series
+        Float64 monthly return series sorted by date.
+    """
     return _load_daily(csv_path)
 
 
 def _monthly_from_daily(daily: pd.Series) -> pd.Series:
+    """Compound daily returns into month-end monthly returns.
+
+    Parameters
+    ----------
+    daily : pd.Series
+        Daily return series with a DatetimeIndex.
+
+    Returns
+    -------
+    pd.Series
+        Month-end compounded returns as a float64 Series.
+    """
     return ((1 + daily).resample("ME").prod() - 1).astype("float64")
 
 
 def _find_file(directory: Path, suffix: str) -> Path | None:
-    """Find a CSV file ending with *suffix* inside directory."""
+    """Find a CSV file ending with *suffix* inside directory.
+
+    Parameters
+    ----------
+    directory : Path
+        Directory to search for matching CSV files.
+    suffix : str
+        Filename suffix to match (e.g. ``"_daily_portfolio_returns"``).
+
+    Returns
+    -------
+    Path or None
+        First alphabetically matching ``.csv`` file, or ``None`` if
+        no match is found.
+    """
     matches = sorted(directory.glob(f"*{suffix}.csv"))
     return matches[0] if matches else None
 
 
 def _load_series_from_dir(directory: Path) -> tuple[pd.Series | None, pd.Series | None]:
-    """Return (daily, monthly) from a strategy output directory."""
+    """Return (daily, monthly) from a strategy output directory.
+
+    Parameters
+    ----------
+    directory : Path
+        Strategy output directory containing daily and/or monthly
+        portfolio-return CSV files.
+
+    Returns
+    -------
+    tuple[pd.Series or None, pd.Series or None]
+        ``(daily, monthly)`` return series. If the monthly CSV is
+        missing it is derived by compounding the daily series; if both
+        are absent both elements are ``None``.
+    """
     daily_path   = _find_file(directory, "_daily_portfolio_returns")
     monthly_path = _find_file(directory, "_monthly_portfolio_returns")
 
@@ -118,7 +184,21 @@ def _load_series_from_dir(directory: Path) -> tuple[pd.Series | None, pd.Series 
 # ── Sortino helper ────────────────────────────────────────────────────────────
 
 def _sortino(monthly: pd.Series, risk_free_rate: float = 0.0) -> float:
-    """Annualized Sortino ratio from monthly returns."""
+    """Annualized Sortino ratio from monthly returns.
+
+    Parameters
+    ----------
+    monthly : pd.Series
+        Monthly portfolio return series.
+    risk_free_rate : float, optional
+        Annualized risk-free rate; divided by 12 internally.
+
+    Returns
+    -------
+    float
+        Annualized Sortino ratio, or ``NaN`` if there are fewer than
+        two negative-excess-return observations or downside std is zero.
+    """
     rf_monthly  = risk_free_rate / 12.0
     excess      = monthly - rf_monthly
     downside    = excess[excess < 0]
@@ -135,10 +215,32 @@ def _sortino(monthly: pd.Series, risk_free_rate: float = 0.0) -> float:
 # ── Metrics computation ───────────────────────────────────────────────────────
 
 def _compute_metrics(daily: pd.Series | None, monthly: pd.Series) -> dict:
+    """Compute performance and Sortino metrics from daily or monthly returns.
+
+    Parameters
+    ----------
+    daily : pd.Series or None
+        Daily return series used when available (preferred for accuracy);
+        if ``None`` the monthly series is used instead.
+    monthly : pd.Series
+        Monthly return series used for the Sortino ratio calculation and
+        as a fallback for other metrics when ``daily`` is ``None``.
+
+    Returns
+    -------
+    dict
+        Keys: ``annualized_return``, ``annualized_volatility``,
+        ``sharpe_ratio``, ``sortino_ratio``, ``max_drawdown``,
+        ``calmar_ratio``, ``start_date``, ``end_date``.
+    """
     if daily is not None:
-        base = compute_performance_metrics(daily, periods_per_year=252, risk_free_rate=RISK_FREE_RATE)
+        base = compute_performance_metrics(
+            daily, periods_per_year=252, risk_free_rate=RISK_FREE_RATE
+        )
     else:
-        base = compute_performance_metrics(monthly, periods_per_year=12, risk_free_rate=RISK_FREE_RATE)
+        base = compute_performance_metrics(
+            monthly, periods_per_year=12, risk_free_rate=RISK_FREE_RATE
+        )
 
     sortino = _sortino(monthly, RISK_FREE_RATE)
     return {
@@ -154,6 +256,22 @@ def _compute_metrics(daily: pd.Series | None, monthly: pd.Series) -> dict:
 
 
 def _metrics_row(label: str, daily: pd.Series | None, monthly: pd.Series) -> dict:
+    """Build one named summary-metrics row.
+
+    Parameters
+    ----------
+    label : str
+        Strategy name used as the ``"strategy"`` key in the returned dict.
+    daily : pd.Series or None
+        Daily return series (passed through to ``_compute_metrics``).
+    monthly : pd.Series
+        Monthly return series (passed through to ``_compute_metrics``).
+
+    Returns
+    -------
+    dict
+        Metrics dict with a ``"strategy"`` key prepended.
+    """
     m = _compute_metrics(daily, monthly)
     return {"strategy": label, **m}
 
@@ -161,6 +279,21 @@ def _metrics_row(label: str, daily: pd.Series | None, monthly: pd.Series) -> dic
 # ── Rolling Sharpe ────────────────────────────────────────────────────────────
 
 def _rolling_sharpe(monthly_df: pd.DataFrame, window: int = 12) -> pd.DataFrame:
+    """Compute annualized rolling Sharpe ratios from monthly returns.
+
+    Parameters
+    ----------
+    monthly_df : pd.DataFrame
+        Wide-format monthly return DataFrame, columns = strategy names.
+    window : int, optional
+        Rolling window length in months.
+
+    Returns
+    -------
+    pd.DataFrame
+        Annualized rolling Sharpe ratios with the same shape and index as
+        ``monthly_df``; columns sorted alphabetically.
+    """
     if monthly_df.empty:
         return pd.DataFrame()
     rm  = monthly_df.rolling(window=window).mean()
@@ -174,7 +307,20 @@ def _rolling_sharpe(monthly_df: pd.DataFrame, window: int = 12) -> pd.DataFrame:
 # ── Excel saving ──────────────────────────────────────────────────────────────
 
 def _save_xlsx_colored(df: pd.DataFrame, path: Path, row_colors: dict[str, str]) -> None:
-    """Save DataFrame to xlsx; apply per-row background fill based on row_colors[strategy_name]."""
+    """Save DataFrame to xlsx; apply per-row background fill based on row_colors[strategy_name].
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame to write; must contain a ``"strategy"`` column for
+        color lookup.
+    path : Path
+        Destination ``.xlsx`` file path (parent directory is created if
+        needed).
+    row_colors : dict[str, str]
+        Mapping from strategy name to a six-character hex fill color
+        (without ``#``).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_excel(path, index=False, sheet_name="summary")
 
@@ -282,6 +428,22 @@ def _scan_permutation_dirs() -> dict[tuple[str, int], dict[int, Path]]:
 # ── Load original strategy ────────────────────────────────────────────────────
 
 def _original_dir(method: str, k: int) -> Path:
+    """Return the output directory of the original non-permuted strategy.
+
+    Parameters
+    ----------
+    method : str
+        Clustering method, either ``"kmeans"`` or ``"kmedoids"``.
+    k : int
+        Number of clusters.
+
+    Returns
+    -------
+    Path
+        Expected output directory for the non-permuted strategy,
+        e.g. ``<BACKTESTS_ROOT>/kmeans_ew_inter_markowitz_intra/
+        kmeans_ew_inter_markowitz_intra_k5/``.
+    """
     prefix = _METHOD_PREFIX[method]
     return BACKTESTS_ROOT / prefix / f"{prefix}_k{k}"
 
@@ -294,7 +456,27 @@ def _build_k_comparison(
     seed_dirs: dict[int, Path],
     out_dir: Path,
 ) -> dict | None:
-    """Build comparison for one (method, k) pair. Returns aggregate row or None."""
+    """Build comparison for one (method, k) pair. Returns aggregate row or None.
+
+    Parameters
+    ----------
+    method : str
+        Clustering method, either ``"kmeans"`` or ``"kmedoids"``.
+    k : int
+        Number of clusters.
+    seed_dirs : dict[int, Path]
+        Mapping from seed integer to the corresponding permutation
+        strategy output directory.
+    out_dir : Path
+        Directory where comparison CSVs and the colored xlsx are saved.
+
+    Returns
+    -------
+    dict or None
+        Aggregate info dict with keys ``k``, ``original``, and
+        ``random_mean`` for use in the all-k tables, or ``None`` if no
+        seed data could be loaded.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
 
     prefix   = _METHOD_PREFIX[method]
@@ -393,7 +575,20 @@ _METRIC_COLS = [
 
 
 def _build_value_added(agg_rows: list[dict]) -> pd.DataFrame:
-    """Build value_added table: one row per k, original vs random_mean + diff."""
+    """Build value_added table: one row per k, original vs random_mean + diff.
+
+    Parameters
+    ----------
+    agg_rows : list[dict]
+        List of aggregate dicts returned by ``_build_k_comparison``,
+        each containing ``k``, ``original``, and ``random_mean`` keys.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per k with columns for original metrics, random_mean
+        metrics, and the difference (original minus random_mean).
+    """
     records = []
     for agg in sorted(agg_rows, key=lambda x: x["k"]):
         k    = agg["k"]
@@ -415,7 +610,21 @@ def _build_value_added(agg_rows: list[dict]) -> pd.DataFrame:
 
 
 def _build_k_comparison_table(agg_rows: list[dict], method: str) -> pd.DataFrame:
-    """Build k_comparison: alternating original / random_mean rows sorted by k."""
+    """Build k_comparison: alternating original / random_mean rows sorted by k.
+
+    Parameters
+    ----------
+    agg_rows : list[dict]
+        List of aggregate dicts from ``_build_k_comparison``.
+    method : str
+        Clustering method used to construct variant label strings.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with alternating original / random_mean rows for each
+        k, columns: ``k``, ``variant``, and all metric columns.
+    """
     prefix  = _METHOD_PREFIX[method]
     records = []
     for agg in sorted(agg_rows, key=lambda x: x["k"]):
@@ -433,6 +642,18 @@ def _build_k_comparison_table(agg_rows: list[dict], method: str) -> pd.DataFrame
 
 
 def _build_all_k(method: str, agg_rows: list[dict], out_dir: Path) -> None:
+    """Build and save all-k permutation comparison tables for one method.
+
+    Parameters
+    ----------
+    method : str
+        Clustering method, either ``"kmeans"`` or ``"kmedoids"``.
+    agg_rows : list[dict]
+        List of aggregate dicts from ``_build_k_comparison``, one per k.
+    out_dir : Path
+        Output directory where ``value_added`` and ``k_comparison``
+        CSV and xlsx files are saved.
+    """
     if not agg_rows:
         return
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -465,6 +686,7 @@ def _build_all_k(method: str, agg_rows: list[dict], out_dir: Path) -> None:
 # ── Entry point ───────────────────────────────────────────────────────────────
 
 def main() -> None:
+    """Parse CLI arguments and build permutation summary outputs."""
     parser = argparse.ArgumentParser(
         description="Build permutation ablation summaries."
     )

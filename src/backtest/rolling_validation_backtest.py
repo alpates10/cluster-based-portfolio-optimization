@@ -52,6 +52,20 @@ _DTW_CACHE_DIR: str = str(
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _make_dtw_cache_key(window_returns: pd.DataFrame) -> str:
+    """Build a deterministic cache key from window dates and sorted tickers.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window, indexed by date
+        with ticker symbols as columns.
+
+    Returns
+    -------
+    str
+        A 24-character hexadecimal SHA-256 digest suitable for use as a
+        cache filename stem.
+    """
     idx = window_returns.index
     start = str(idx[0].date()) if hasattr(idx[0], "date") else str(idx[0])
     end = str(idx[-1].date()) if hasattr(idx[-1], "date") else str(idx[-1])
@@ -69,7 +83,32 @@ def _build_weights_for_k(
     random_state: int,
     dtw_dist: np.ndarray | None,
 ) -> pd.Series:
-    """Build portfolio weights for a single k. Falls back to EW on failure."""
+    """Build portfolio weights for a single k. Falls back to EW on failure.
+
+    Parameters
+    ----------
+    k : int
+        Number of clusters.
+    asset_matrix : np.ndarray
+        Shape (n_assets, window_length) return matrix.
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    clustering_method : str
+        ``'kmeans'`` or ``'kmedoids'``.
+    weighting_method : str
+        ``'ew'`` (equal weight) or ``'mv'`` (max-Sharpe within clusters).
+    random_state : int
+        Random seed forwarded to the clustering algorithm.
+    dtw_dist : np.ndarray | None
+        Precomputed DTW distance matrix; required when
+        clustering_method='kmedoids', ignored otherwise.
+
+    Returns
+    -------
+    pd.Series
+        Non-negative portfolio weights indexed by ticker, summing to 1.0.
+        Equal weights are returned on any clustering or optimisation failure.
+    """
     n = window_returns.shape[1]
     ew_fallback = pd.Series(1.0 / n, index=window_returns.columns, dtype="float64")
     try:
@@ -78,7 +117,9 @@ def _build_weights_for_k(
         elif clustering_method == "kmedoids":
             if dtw_dist is None:
                 raise ValueError("dtw_dist must be provided for kmedoids")
-            labels = kmedoids_labels_from_distance(dtw_dist, n_clusters=k, random_state=random_state)
+            labels = kmedoids_labels_from_distance(
+                dtw_dist, n_clusters=k, random_state=random_state
+            )
         else:
             raise ValueError(f"Unknown clustering_method: {clustering_method!r}")
 
@@ -100,7 +141,28 @@ def _compute_all_k_weights(
     random_state: int,
     dtw_dist: np.ndarray | None,
 ) -> dict[int, pd.Series]:
-    """Return {k: weights_series} for every k in k_values."""
+    """Return a weights Series for every k in k_values.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    k_values : list[int]
+        Candidate cluster counts to evaluate.
+    clustering_method : str
+        ``'kmeans'`` or ``'kmedoids'``.
+    weighting_method : str
+        ``'ew'`` or ``'mv'``.
+    random_state : int
+        Random seed forwarded to the clustering algorithm.
+    dtw_dist : np.ndarray | None
+        Precomputed DTW distance matrix; required for kmedoids.
+
+    Returns
+    -------
+    dict[int, pd.Series]
+        Mapping ``{k: weights_series}`` for each k in k_values.
+    """
     asset_matrix = raw_return_representation(window_returns)
     return {
         k: _build_weights_for_k(
@@ -121,11 +183,26 @@ def _select_k(
     val_window: int,
     k_values: list[int],
 ) -> tuple[int, float]:
-    """Return (selected_k, best_sharpe).
+    """Select the k with the highest annualised Sharpe over the validation window.
 
     Called only after the warm-up, so val_history is guaranteed to have
     at least val_window entries for every k.  If all Sharpe values are
     -inf (e.g. zero variance) the first k in k_values is returned.
+
+    Parameters
+    ----------
+    val_history : dict[int, list[float]]
+        Accumulated monthly return lists keyed by k value.
+    val_window : int
+        Number of past months used to evaluate each k's Sharpe ratio.
+    k_values : list[int]
+        Candidate cluster counts; the fallback is the first element.
+
+    Returns
+    -------
+    tuple[int, float]
+        (selected_k, best_sharpe). best_sharpe is NaN when all Sharpe
+        values were -inf.
     """
     best_k = k_values[0]
     best_sharpe = -np.inf
@@ -150,7 +227,21 @@ def _update_val_history(
     oos_returns: pd.DataFrame,
     asset_columns: pd.Index,
 ) -> None:
-    """Append each k's realised monthly return for this OOS period."""
+    """Append each k's realised monthly return for this out-of-sample period.
+
+    Parameters
+    ----------
+    val_history : dict[int, list[float]]
+        Accumulated monthly return lists keyed by k value; mutated in place.
+    k_values : list[int]
+        Candidate cluster counts to update.
+    weights_by_k : dict[int, pd.Series]
+        Portfolio weights for each k, indexed by ticker.
+    oos_returns : pd.DataFrame
+        Out-of-sample daily returns for the current period (T x N).
+    asset_columns : pd.Index
+        Full asset universe index used to align weights.
+    """
     for k in k_values:
         w_k = weights_by_k[k].reindex(asset_columns).fillna(0.0)
         k_oos = oos_returns @ w_k

@@ -40,7 +40,10 @@ from src.clustering.distances import (
 )
 from src.clustering.representations import raw_return_representation
 from src.clustering.pipeline import _make_dtw_cache_key
-from src.paths import get_returns_path, get_clustering_analysis_dir, get_dtw_cache_dir, UNIVERSE_CHOICES
+from src.paths import (
+    get_returns_path, get_clustering_visualization_dir,
+    get_dtw_cache_dir, UNIVERSE_CHOICES,
+)
 
 # ── Configuration ────────────────────────────────────────────────────────────
 TARGET_DATE = "2008-04-01"   # approximate window end; nearest available used
@@ -53,7 +56,20 @@ MDS_N_INIT = 4
 
 
 def _get_sample_window(returns: pd.DataFrame) -> pd.DataFrame:
-    """Return the first ESTIMATION_WINDOW trading days from the start of the data."""
+    """Return the first ESTIMATION_WINDOW trading days from the start of the data.
+
+    Parameters
+    ----------
+    returns : pd.DataFrame
+        Full daily return matrix with a DatetimeIndex, shape
+        ``(n_days, n_assets)``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Slice containing exactly ``ESTIMATION_WINDOW`` rows starting from
+        the first available date.
+    """
     if len(returns) < ESTIMATION_WINDOW:
         raise ValueError(
             f"Not enough data for estimation window "
@@ -68,7 +84,18 @@ def _get_sample_window(returns: pd.DataFrame) -> pd.DataFrame:
 
 
 def _mds_embedding(dist_matrix: np.ndarray) -> np.ndarray:
-    """2-D MDS embedding from a precomputed distance matrix."""
+    """2-D MDS embedding from a precomputed distance matrix.
+
+    Parameters
+    ----------
+    dist_matrix : np.ndarray
+        Square symmetric distance matrix of shape ``(n_assets, n_assets)``.
+
+    Returns
+    -------
+    np.ndarray
+        2-D coordinates array of shape ``(n_assets, 2)``.
+    """
     import sklearn
     from packaging.version import Version
     if Version(sklearn.__version__) >= Version("1.8"):
@@ -97,7 +124,19 @@ def _mds_embedding(dist_matrix: np.ndarray) -> np.ndarray:
 
 
 def _discrete_cmap(n: int):
-    """Return n distinct colours from tab20 / tab10."""
+    """Return n distinct colours from tab20 / tab10.
+
+    Parameters
+    ----------
+    n : int
+        Number of distinct colours required.
+
+    Returns
+    -------
+    list
+        List of ``n`` RGBA colour tuples evenly sampled from the
+        ``tab20`` colormap (or ``tab10`` when ``n <= 10``).
+    """
     base = matplotlib.colormaps["tab20" if n > 10 else "tab10"]
     return [base(i / max(n - 1, 1)) for i in range(n)]
 
@@ -106,7 +145,20 @@ def _axis_limits_with_padding(
     embedding: np.ndarray,
     pad_fraction: float = 0.10,
 ) -> tuple[float, float, float, float]:
-    """Return (xmin, xmax, ymin, ymax) with pad_fraction padding on each side."""
+    """Return (xmin, xmax, ymin, ymax) with pad_fraction padding on each side.
+
+    Parameters
+    ----------
+    embedding : np.ndarray
+        2-D coordinate array of shape ``(n_assets, 2)``.
+    pad_fraction : float, optional
+        Fraction of the data range added as padding on each side.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(xmin, xmax, ymin, ymax)`` axis limits with padding applied.
+    """
     xmin, xmax = float(embedding[:, 0].min()), float(embedding[:, 0].max())
     ymin, ymax = float(embedding[:, 1].min()), float(embedding[:, 1].max())
     x_pad = (xmax - xmin) * pad_fraction
@@ -119,7 +171,17 @@ def _scatter_clusters(
     embedding: np.ndarray,
     labels: np.ndarray,
 ) -> None:
-    """Draw one scatter series per cluster on *ax*."""
+    """Draw one scatter series per cluster on *ax*.
+
+    Parameters
+    ----------
+    ax : plt.Axes
+        Matplotlib axes on which to draw the scatter plot.
+    embedding : np.ndarray
+        2-D coordinate array of shape ``(n_assets, 2)``.
+    labels : np.ndarray
+        Integer cluster label for each asset, shape ``(n_assets,)``.
+    """
     unique = sorted(np.unique(labels))
     colours = _discrete_cmap(len(unique))
     colour_map = {c: colours[i] for i, c in enumerate(unique)}
@@ -136,7 +198,7 @@ def _scatter_clusters(
         )
 
 
-# ── DEĞİŞİKLİK 1: tekli plot — eksenleri veriye sığdır (10 % padding) ────────
+# ── Change 1: single plot with axes fitted to data (10% padding) ──────────────
 
 def plot_mds(
     embedding: np.ndarray,
@@ -145,6 +207,21 @@ def plot_mds(
     method_label: str,
     output_path: Path,
 ) -> None:
+    """Save a single MDS scatter plot for one method and k.
+
+    Parameters
+    ----------
+    embedding : np.ndarray
+        2-D MDS coordinates of shape ``(n_assets, 2)``.
+    labels : np.ndarray
+        Integer cluster assignment for each asset, shape ``(n_assets,)``.
+    k : int
+        Number of clusters (used only for the plot title).
+    method_label : str
+        Human-readable method description for the plot title.
+    output_path : Path
+        Full path (including filename) where the PNG is saved.
+    """
     fig, ax = plt.subplots(figsize=(8, 6))
     _scatter_clusters(ax, embedding, labels)
 
@@ -169,6 +246,20 @@ def plot_silhouette_comparison(
     method_label: str,
     output_path: Path,
 ) -> None:
+    """Save a silhouette-score line plot for one clustering method.
+
+    Parameters
+    ----------
+    k_values : list[int]
+        Ordered list of k values on the x-axis.
+    scores : list[float]
+        Corresponding silhouette scores; NaN entries are excluded from
+        the plot.
+    method_label : str
+        Human-readable method name used in the plot title.
+    output_path : Path
+        Full path where the PNG is saved.
+    """
     valid = [(k, s) for k, s in zip(k_values, scores) if not np.isnan(s)]
     if not valid:
         print(f"  No valid silhouette scores for {method_label}, skipping plot.")
@@ -188,7 +279,7 @@ def plot_silhouette_comparison(
     print(f"  Saved: {output_path.name}")
 
 
-# ── DEĞİŞİKLİK 2: büyük karşılaştırma grid'i ─────────────────────────────────
+# ── Change 2: large comparison grid ──────────────────────────────────────────
 
 def _local_axis_limits(
     embedding: np.ndarray,
@@ -196,7 +287,25 @@ def _local_axis_limits(
     pct_lo: float = 5.0,
     pct_hi: float = 95.0,
 ) -> tuple[float, float, float, float]:
-    """Per-subplot limits: percentile clip + pad_fraction padding."""
+    """Per-subplot limits: percentile clip + pad_fraction padding.
+
+    Parameters
+    ----------
+    embedding : np.ndarray
+        2-D coordinate array of shape ``(n_assets, 2)``.
+    pad_fraction : float, optional
+        Fraction of the clipped range added as padding on each side.
+    pct_lo : float, optional
+        Lower percentile used to clip outliers before computing limits.
+    pct_hi : float, optional
+        Upper percentile used to clip outliers before computing limits.
+
+    Returns
+    -------
+    tuple[float, float, float, float]
+        ``(xmin, xmax, ymin, ymax)`` after percentile clipping and
+        padding.
+    """
     xlo = float(np.percentile(embedding[:, 0], pct_lo))
     xhi = float(np.percentile(embedding[:, 0], pct_hi))
     ylo = float(np.percentile(embedding[:, 1], pct_lo))
@@ -255,6 +364,15 @@ def plot_mds_comparison_grid(
 
     # ── Subplots ──────────────────────────────────────────────────────────────
     def _style(ax: plt.Axes, title: str) -> None:
+        """Apply shared subplot titles, labels, ticks, and legend style.
+
+        Parameters
+        ----------
+        ax : plt.Axes
+            Subplot axes to configure.
+        title : str
+            Title string set on the axes.
+        """
         ax.set_title(title, fontsize=10)
         ax.set_xlabel("MDS dim 1", fontsize=8)
         ax.set_ylabel("MDS dim 2", fontsize=8)
@@ -305,13 +423,14 @@ def plot_mds_comparison_grid(
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    """Generate clustering MDS and silhouette plots for one universe."""
     parser = argparse.ArgumentParser(description="Generate clustering visualisation plots.")
     parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
     args = parser.parse_args()
 
     # ── Paths ────────────────────────────────────────────────────────────────
     returns_path = get_returns_path(args.universe)
-    plots_dir = get_clustering_analysis_dir(args.universe) / "plots"
+    plots_dir = get_clustering_visualization_dir(args.universe) / "plots"
     plots_dir.mkdir(parents=True, exist_ok=True)
     dtw_cache = get_dtw_cache_dir(args.universe)
 
@@ -378,7 +497,9 @@ def main() -> None:
         else:
             sil = float("nan")
         sil_kmeans.append(sil)
-        print(f"  KMeans   silhouette: {sil:.4f}" if not np.isnan(sil) else "  KMeans   silhouette: N/A")
+        msg = (f"  KMeans   silhouette: {sil:.4f}"
+               if not np.isnan(sil) else "  KMeans   silhouette: N/A")
+        print(msg)
 
         # K-Medoids DTW
         if k == 1:
@@ -402,7 +523,9 @@ def main() -> None:
         else:
             sil_kmed = float("nan")
         sil_kmedoids.append(sil_kmed)
-        print(f"  K-Medoids silhouette: {sil_kmed:.4f}" if not np.isnan(sil_kmed) else "  K-Medoids silhouette: N/A")
+        msg = (f"  K-Medoids silhouette: {sil_kmed:.4f}"
+               if not np.isnan(sil_kmed) else "  K-Medoids silhouette: N/A")
+        print(msg)
 
     # ── Silhouette comparison plots ───────────────────────────────────────────
     print("\nGenerating silhouette comparison plots...")

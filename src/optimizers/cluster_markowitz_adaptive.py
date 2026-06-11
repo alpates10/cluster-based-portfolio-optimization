@@ -48,11 +48,26 @@ def _kmeans_adaptive_labels_and_sil(
     k_max: int | None = None,
 ) -> tuple[dict[int, np.ndarray], dict[int, float], int]:
     """
-    Compute KMeans labels + silhouette (on correlation distance) for every k
-    in K_VALUES_ADAPTIVE, then return:
-      labels_per_k : {k: labels}
-      sil_scores   : {k: score}
-      selected_k   : best k via delta rule
+    Compute KMeans labels and silhouette scores for every k in K_VALUES_ADAPTIVE.
+
+    Silhouette is evaluated on the correlation distance matrix. The best k is
+    chosen with the incremental-delta rule.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    random_state : int
+        Random seed for reproducible clustering.
+    k_max : int | None
+        Upper bound on k values to evaluate; None means no limit.
+
+    Returns
+    -------
+    tuple[dict[int, np.ndarray], dict[int, float], int]
+        (labels_per_k, sil_scores, selected_k) where labels_per_k maps each k
+        to its label array, sil_scores maps each k to its silhouette score,
+        and selected_k is the best k chosen by the delta rule.
     """
     window_returns = window_returns.loc[:, window_returns.std() > 1e-8]
     asset_matrix = raw_return_representation(window_returns)
@@ -80,8 +95,30 @@ def _kmedoids_adaptive_labels_and_sil(
     k_max: int | None = None,
 ) -> tuple[dict[int, np.ndarray], dict[int, float], int]:
     """
-    Compute KMedoids labels + silhouette (on DTW distance) for every k
-    in K_VALUES_ADAPTIVE.  DTW matrix is loaded from cache when available.
+    Compute KMedoids labels and silhouette scores for every k in K_VALUES_ADAPTIVE.
+
+    Silhouette is evaluated on the DTW distance matrix. The DTW matrix is loaded
+    from cache when available. The best k is chosen with the incremental-delta rule.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_n_jobs : int
+        Number of parallel jobs for DTW computation (-1 = all cores).
+    dtw_cache_dir : str | None
+        Directory for the DTW distance matrix cache; None uses the project default.
+    k_max : int | None
+        Upper bound on k values to evaluate; None means no limit.
+
+    Returns
+    -------
+    tuple[dict[int, np.ndarray], dict[int, float], int]
+        (labels_per_k, sil_scores, selected_k) where labels_per_k maps each k
+        to its label array, sil_scores maps each k to its silhouette score,
+        and selected_k is the best k chosen by the delta rule.
     """
     window_returns = window_returns.loc[:, window_returns.std() > 1e-8]
     asset_matrix = raw_return_representation(window_returns)
@@ -112,7 +149,27 @@ def get_cluster_kmeans_adaptive_markowitz_inter_ew_intra(
     random_state: int = RANDOM_SEED_DEFAULT,
     k_max: int | None = None,
 ) -> tuple[pd.Series, dict]:
-    labels_per_k, sil_scores, k = _kmeans_adaptive_labels_and_sil(window_returns, random_state, k_max)
+    """
+    KMeans adaptive-k strategy: Markowitz between clusters, equal weight within (Strategy A).
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    random_state : int
+        Random seed for reproducible clustering.
+    k_max : int | None
+        Upper bound on k values to search; None means no limit.
+
+    Returns
+    -------
+    tuple[pd.Series, dict]
+        Portfolio weights indexed by ticker, and metadata dict with
+        'selected_k' (int) and 'silhouette_score' (float).
+    """
+    labels_per_k, sil_scores, k = _kmeans_adaptive_labels_and_sil(
+        window_returns, random_state, k_max
+    )
     weights = _markowitz_inter_ew_intra(window_returns, labels_per_k[k])
     return weights, {"selected_k": k, "silhouette_score": sil_scores[k]}
 
@@ -122,7 +179,27 @@ def get_cluster_kmeans_adaptive_ew_inter_markowitz_intra(
     random_state: int = RANDOM_SEED_DEFAULT,
     k_max: int | None = None,
 ) -> tuple[pd.Series, dict]:
-    labels_per_k, sil_scores, k = _kmeans_adaptive_labels_and_sil(window_returns, random_state, k_max)
+    """
+    KMeans adaptive-k strategy: equal weight between clusters, Markowitz within (Strategy B).
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    random_state : int
+        Random seed for reproducible clustering.
+    k_max : int | None
+        Upper bound on k values to search; None means no limit.
+
+    Returns
+    -------
+    tuple[pd.Series, dict]
+        Portfolio weights indexed by ticker, and metadata dict with
+        'selected_k' (int) and 'silhouette_score' (float).
+    """
+    labels_per_k, sil_scores, k = _kmeans_adaptive_labels_and_sil(
+        window_returns, random_state, k_max
+    )
     weights = _ew_inter_markowitz_intra(window_returns, labels_per_k[k])
     return weights, {"selected_k": k, "silhouette_score": sil_scores[k]}
 
@@ -132,7 +209,27 @@ def get_cluster_kmeans_adaptive_markowitz_inter_markowitz_intra(
     random_state: int = RANDOM_SEED_DEFAULT,
     k_max: int | None = None,
 ) -> tuple[pd.Series, dict]:
-    labels_per_k, sil_scores, k = _kmeans_adaptive_labels_and_sil(window_returns, random_state, k_max)
+    """
+    KMeans adaptive-k strategy: Markowitz optimization at both cluster levels (Strategy C).
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    random_state : int
+        Random seed for reproducible clustering.
+    k_max : int | None
+        Upper bound on k values to search; None means no limit.
+
+    Returns
+    -------
+    tuple[pd.Series, dict]
+        Portfolio weights indexed by ticker, and metadata dict with
+        'selected_k' (int) and 'silhouette_score' (float).
+    """
+    labels_per_k, sil_scores, k = _kmeans_adaptive_labels_and_sil(
+        window_returns, random_state, k_max
+    )
     weights = _markowitz_inter_markowitz_intra(window_returns, labels_per_k[k])
     return weights, {"selected_k": k, "silhouette_score": sil_scores[k]}
 
@@ -144,6 +241,28 @@ def get_cluster_kmedoids_dtw_adaptive_markowitz_inter_ew_intra(
     dtw_cache_dir: str | None = None,
     k_max: int | None = None,
 ) -> tuple[pd.Series, dict]:
+    """
+    KMedoids-DTW adaptive-k strategy: Markowitz between clusters, equal weight within (Strategy A).
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_n_jobs : int
+        Number of parallel jobs for DTW computation (-1 = all cores).
+    dtw_cache_dir : str | None
+        Directory for the DTW distance matrix cache; None uses the project default.
+    k_max : int | None
+        Upper bound on k values to search; None means no limit.
+
+    Returns
+    -------
+    tuple[pd.Series, dict]
+        Portfolio weights indexed by ticker, and metadata dict with
+        'selected_k' (int) and 'silhouette_score' (float).
+    """
     labels_per_k, sil_scores, k = _kmedoids_adaptive_labels_and_sil(
         window_returns, random_state, dtw_n_jobs, dtw_cache_dir, k_max
     )
@@ -158,6 +277,28 @@ def get_cluster_kmedoids_dtw_adaptive_ew_inter_markowitz_intra(
     dtw_cache_dir: str | None = None,
     k_max: int | None = None,
 ) -> tuple[pd.Series, dict]:
+    """
+    KMedoids-DTW adaptive-k strategy: equal weight between clusters, Markowitz within (Strategy B).
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_n_jobs : int
+        Number of parallel jobs for DTW computation (-1 = all cores).
+    dtw_cache_dir : str | None
+        Directory for the DTW distance matrix cache; None uses the project default.
+    k_max : int | None
+        Upper bound on k values to search; None means no limit.
+
+    Returns
+    -------
+    tuple[pd.Series, dict]
+        Portfolio weights indexed by ticker, and metadata dict with
+        'selected_k' (int) and 'silhouette_score' (float).
+    """
     labels_per_k, sil_scores, k = _kmedoids_adaptive_labels_and_sil(
         window_returns, random_state, dtw_n_jobs, dtw_cache_dir, k_max
     )
@@ -172,6 +313,28 @@ def get_cluster_kmedoids_dtw_adaptive_markowitz_inter_markowitz_intra(
     dtw_cache_dir: str | None = None,
     k_max: int | None = None,
 ) -> tuple[pd.Series, dict]:
+    """
+    KMedoids-DTW adaptive-k strategy: Markowitz optimization at both cluster levels (Strategy C).
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_n_jobs : int
+        Number of parallel jobs for DTW computation (-1 = all cores).
+    dtw_cache_dir : str | None
+        Directory for the DTW distance matrix cache; None uses the project default.
+    k_max : int | None
+        Upper bound on k values to search; None means no limit.
+
+    Returns
+    -------
+    tuple[pd.Series, dict]
+        Portfolio weights indexed by ticker, and metadata dict with
+        'selected_k' (int) and 'silhouette_score' (float).
+    """
     labels_per_k, sil_scores, k = _kmedoids_adaptive_labels_and_sil(
         window_returns, random_state, dtw_n_jobs, dtw_cache_dir, k_max
     )

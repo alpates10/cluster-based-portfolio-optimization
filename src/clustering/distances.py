@@ -96,6 +96,19 @@ def dtw_distance_matrix(
 
 
 def euclidean_distance_matrix(asset_return_matrix: np.ndarray) -> np.ndarray:
+    """
+    Compute the pairwise Euclidean distance matrix between asset return vectors.
+
+    Parameters
+    ----------
+    asset_return_matrix : np.ndarray
+        Matrix with shape (n_assets, window_length).
+
+    Returns
+    -------
+    np.ndarray
+        Symmetric float64 distance matrix with shape (n_assets, n_assets).
+    """
     if asset_return_matrix.ndim != 2:
         raise ValueError("asset_return_matrix must be 2D")
     dist = pairwise_distances(asset_return_matrix, metric="euclidean")
@@ -107,6 +120,21 @@ def euclidean_distance_matrix(asset_return_matrix: np.ndarray) -> np.ndarray:
 
 
 def correlation_distance_matrix(asset_return_matrix: np.ndarray) -> np.ndarray:
+    """
+    Compute the pairwise correlation distance matrix between asset return vectors.
+
+    Correlation distance is defined as d = 1 - corr(i, j) and lies in [0, 2].
+
+    Parameters
+    ----------
+    asset_return_matrix : np.ndarray
+        Matrix with shape (n_assets, window_length).
+
+    Returns
+    -------
+    np.ndarray
+        Symmetric float64 distance matrix with shape (n_assets, n_assets).
+    """
     if asset_return_matrix.ndim != 2:
         raise ValueError("asset_return_matrix must be 2D")
     dist = pairwise_distances(asset_return_matrix, metric="correlation")
@@ -124,6 +152,32 @@ def compute_distance_matrix(
     dtw_cache_dir: str | None = None,
     dtw_cache_key: str | None = None,
 ) -> np.ndarray:
+    """
+    Compute a distance matrix using the requested distance type.
+
+    Parameters
+    ----------
+    asset_return_matrix : np.ndarray
+        Matrix with shape (n_assets, window_length).
+    distance : str
+        Distance type: 'euclidean', 'l2', 'dtw', 'correlation', or 'corr'.
+    dtw_n_jobs : int
+        Number of parallel jobs for DTW computation (-1 = all cores).
+    dtw_cache_dir : str | None
+        Cache directory for DTW results; used only for DTW.
+    dtw_cache_key : str | None
+        Explicit cache filename stem; used only for DTW.
+
+    Returns
+    -------
+    np.ndarray
+        Symmetric float64 distance matrix with shape (n_assets, n_assets).
+
+    Raises
+    ------
+    ValueError
+        If an unsupported distance type is requested.
+    """
     distance_key = distance.lower()
     if distance_key in {"euclidean", "l2"}:
         return euclidean_distance_matrix(asset_return_matrix)

@@ -1,7 +1,7 @@
 """Full pipeline runner: backtest → rolling val → permutation → reports → plots.
 
-Ön koşul: data/processed/{universe}/returns_final.csv mevcut olmalı.
-Yoksa hata verir; önce prepare_data.py çalıştırın.
+Prerequisite: data/processed/{universe}/returns_final.csv must exist.
+If it is missing, the runner exits; run prepare_data.py first.
 """
 
 import argparse
@@ -14,7 +14,7 @@ UNIVERSE_CHOICES = ["sp500", "bist100", "nifty50", "sse"]
 
 STEPS = [
     {
-        "desc": "Backtest — tüm stratejiler (run_backtest --mode all)",
+        "desc": "Backtest — all strategies (run_backtest --mode all)",
         "script": "scripts/run_backtest.py",
         "extra_args": ["--mode", "all"],
     },
@@ -24,42 +24,42 @@ STEPS = [
         "extra_args": [],
     },
     {
-        "desc": "Permutation backtest — her iki yöntem (run_permutation_backtest)",
+        "desc": "Permutation backtest — both methods (run_permutation_backtest)",
         "script": "scripts/run_permutation_backtest.py",
         "extra_args": ["--method", "both"],
     },
     {
-        "desc": "Performans raporu — klasik (make_performance_report --mode classical)",
+        "desc": "Performance report — classical (make_performance_report --mode classical)",
         "script": "scripts/make_performance_report.py",
         "extra_args": ["--mode", "classical"],
     },
     {
-        "desc": "Performans raporu — clustering (make_performance_report --mode clustering)",
+        "desc": "Performance report — clustering (make_performance_report --mode clustering)",
         "script": "scripts/make_performance_report.py",
         "extra_args": ["--mode", "clustering"],
     },
     {
-        "desc": "Performans raporu — rolling validation (make_performance_report --mode rolling_validation)",
+        "desc": "Performance report — rolling validation (make_performance_report)",
         "script": "scripts/make_performance_report.py",
         "extra_args": ["--mode", "rolling_validation"],
     },
     {
-        "desc": "Performans raporu — tümü (make_performance_report --mode all_no_rolling)",
+        "desc": "Performance report — all, no rolling (make_performance_report)",
         "script": "scripts/make_performance_report.py",
         "extra_args": ["--mode", "all_no_rolling"],
     },
     {
-        "desc": "Performans raporu — all (make_performance_report --mode all)",
+        "desc": "Performance report — all (make_performance_report --mode all)",
         "script": "scripts/make_performance_report.py",
         "extra_args": ["--mode", "all"],
     },
     {
-        "desc": "Permutation özet raporu (make_permutation_summary)",
+        "desc": "Permutation summary report (make_permutation_summary)",
         "script": "scripts/make_permutation_summary.py",
         "extra_args": [],
     },
     {
-        "desc": "Clustering görselleri (make_clustering_plots)",
+        "desc": "Clustering visuals (make_clustering_plots)",
         "script": "scripts/make_clustering_plots.py",
         "extra_args": [],
     },
@@ -67,6 +67,18 @@ STEPS = [
 
 
 def fmt_duration(seconds: float) -> str:
+    """Format elapsed seconds as a compact minutes/seconds string.
+
+    Parameters
+    ----------
+    seconds : float
+        Elapsed time in seconds.
+
+    Returns
+    -------
+    str
+        Human-readable string such as ``"2d 15s"`` or ``"43s"``.
+    """
     minutes, secs = divmod(int(seconds), 60)
     if minutes:
         return f"{minutes}d {secs}s"
@@ -74,14 +86,15 @@ def fmt_duration(seconds: float) -> str:
 
 
 def main() -> None:
+    """Run the full project pipeline for one universe."""
     parser = argparse.ArgumentParser(
-        description="Tam pipeline: backtest → rolling val → permutation → raporlar → görseller."
+        description="Full pipeline: backtest → rolling val → permutation → reports → plots."
     )
     parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Komutları çalıştırmak yerine sadece yazdır.",
+        help="Print commands instead of running them.",
     )
     parser.add_argument(
         "--skip-strategies",
@@ -91,7 +104,7 @@ def main() -> None:
     parser.add_argument(
         "--skip-permutation",
         action="store_true",
-        help="Permutation backtest ve özet raporunu atla.",
+        help="Skip permutation backtest and summary report.",
     )
     args = parser.parse_args()
 
@@ -99,7 +112,7 @@ def main() -> None:
     returns_csv = project_root / "data" / "processed" / args.universe / "returns_final.csv"
 
     if not returns_csv.exists():
-        print(f"Hata: {args.universe} için veri bulunamadı. Önce prepare_data.py çalıştırın.")
+        print(f"Error: data for {args.universe} was not found. Run prepare_data.py first.")
         sys.exit(1)
 
     python = sys.executable
@@ -107,8 +120,8 @@ def main() -> None:
 
     print(f"\nUniverse : {args.universe}")
     if args.dry_run:
-        print("Mod      : dry-run (komutlar çalıştırılmayacak)")
-    print(f"Adım sayısı: {total_steps}\n")
+        print("Mode     : dry-run (commands will not be executed)")
+    print(f"Step count: {total_steps}\n")
     print("=" * 60)
 
     pipeline_start = time.monotonic()
@@ -120,14 +133,14 @@ def main() -> None:
             "scripts/run_permutation_backtest.py",
             "scripts/make_permutation_summary.py",
         ):
-            print("  Atlandı — --skip-permutation aktif.")
+            print("  Skipped — --skip-permutation is active.")
             continue
 
         cmd = [python, str(project_root / step["script"]), "--universe", args.universe]
         cmd += step["extra_args"]
         if args.skip_strategies and step["script"] == "scripts/run_backtest.py":
             cmd += ["--skip-strategies", args.skip_strategies]
-        cmd_str = " ".join(cmd[1:])  # python binary'yi gizle, okunabilirlik için
+        cmd_str = " ".join(cmd[1:])  # Hide the Python binary for readability.
 
         if args.dry_run:
             print(f"  $ python {cmd_str}")
@@ -138,15 +151,15 @@ def main() -> None:
         elapsed = time.monotonic() - step_start
 
         if result.returncode != 0:
-            print(f"\nHATA: Adım {i} basarisiz oldu (exit code {result.returncode}). Pipeline durduruluyor.")
+            print(f"\nERROR: step {i} failed (exit code {result.returncode}). Stopping pipeline.")
             sys.exit(result.returncode)
 
-        print(f"  Tamamlandi — {fmt_duration(elapsed)}")
+        print(f"  Completed — {fmt_duration(elapsed)}")
 
     if not args.dry_run:
         total_elapsed = time.monotonic() - pipeline_start
         print("\n" + "=" * 60)
-        print(f"Pipeline tamamlandi. Toplam sure: {fmt_duration(total_elapsed)}")
+        print(f"Pipeline completed. Total duration: {fmt_duration(total_elapsed)}")
 
 
 if __name__ == "__main__":

@@ -21,10 +21,7 @@ graphify-out/
 src/analysis/report_graphics.py
 
 # experiments
-experiments/plots
-
-# requirements
-requirements.txt
+experiments/
 
 # claude
 CLAUDE.md

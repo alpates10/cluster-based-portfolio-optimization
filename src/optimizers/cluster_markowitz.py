@@ -31,6 +31,19 @@ _DTW_CACHE_DIR: str = str(
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _make_dtw_cache_key(window_returns: pd.DataFrame) -> str:
+    """
+    Build a deterministic SHA-256 digest from the window bounds and ticker list.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Returns matrix indexed by date with ticker symbols as columns.
+
+    Returns
+    -------
+    str
+        A 24-character hexadecimal digest suitable for use as a cache filename stem.
+    """
     idx   = window_returns.index
     start = str(idx[0].date())  if hasattr(idx[0],  "date") else str(idx[0])
     end   = str(idx[-1].date()) if hasattr(idx[-1], "date") else str(idx[-1])
@@ -40,7 +53,18 @@ def _make_dtw_cache_key(window_returns: pd.DataFrame) -> str:
 
 
 def _markowitz_or_ew(window_returns: pd.DataFrame) -> pd.Series:
-    """Max-Sharpe portfolio; falls back to equal weight on any failure."""
+    """Compute max-Sharpe portfolio weights; fall back to equal weight on any failure.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the assets to optimise (T x N).
+
+    Returns
+    -------
+    pd.Series
+        Non-negative portfolio weights indexed by ticker, summing to 1.0.
+    """
     n  = len(window_returns.columns)
     ew = pd.Series(1.0 / n, index=window_returns.columns, dtype="float64")
     if n < 2:
@@ -68,7 +92,20 @@ def _markowitz_or_ew(window_returns: pd.DataFrame) -> pd.Series:
 
 
 def _build_cluster_map(labels: np.ndarray, asset_index: pd.Index) -> dict[int, list]:
-    """cluster_id → [ticker, ...]  (sorted for determinism)."""
+    """Build a mapping from cluster id to the list of its tickers (sorted for determinism).
+
+    Parameters
+    ----------
+    labels : np.ndarray
+        One-dimensional array of cluster labels, one per asset.
+    asset_index : pd.Index
+        Asset ticker index in the same order as labels.
+
+    Returns
+    -------
+    dict[int, list]
+        Mapping ``{cluster_id: [ticker, ...]}`` with tickers in index order.
+    """
     cluster_map: dict[int, list] = {}
     for i, cid in enumerate(labels):
         cluster_map.setdefault(int(cid), []).append(asset_index[i])
@@ -80,6 +117,23 @@ def _get_labels_kmeans(
     global_k: int,
     random_state: int,
 ) -> np.ndarray:
+    """
+    Run KMeans on raw return vectors and return cluster labels.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window.
+    global_k : int
+        Number of clusters.
+    random_state : int
+        Random seed for reproducible clustering.
+
+    Returns
+    -------
+    np.ndarray
+        One-dimensional array containing one cluster label per asset.
+    """
     asset_matrix = raw_return_representation(window_returns)
     return kmeans_labels(asset_matrix, n_clusters=global_k, random_state=random_state)
 
@@ -91,6 +145,27 @@ def _get_labels_kmedoids(
     dtw_n_jobs: int = -1,
     dtw_cache_dir: str | None = None,
 ) -> np.ndarray:
+    """
+    Run KMedoids on a cached DTW distance matrix and return cluster labels.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window.
+    global_k : int
+        Number of clusters.
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_n_jobs : int
+        Number of parallel jobs for DTW computation (-1 = all cores).
+    dtw_cache_dir : str | None
+        DTW cache directory; if None, the project default is used.
+
+    Returns
+    -------
+    np.ndarray
+        One-dimensional array containing one cluster label per asset.
+    """
     asset_matrix = raw_return_representation(window_returns)
     cache_key    = _make_dtw_cache_key(window_returns)
     dtw_dist     = dtw_distance_matrix(
@@ -105,6 +180,23 @@ def _get_labels_kmedoids(
 
 
 def _normalise(weights_arr: np.ndarray, asset_index: pd.Index) -> pd.Series:
+    """
+    Normalize a raw weight array to sum to 1.0 and return it as a Series.
+
+    If the total weight is zero or negative, equal weights are returned.
+
+    Parameters
+    ----------
+    weights_arr : np.ndarray
+        Raw weight array.
+    asset_index : pd.Index
+        Asset ticker index.
+
+    Returns
+    -------
+    pd.Series
+        Normalized portfolio weights.
+    """
     total = weights_arr.sum()
     if total <= 0:
         n = len(asset_index)
@@ -118,12 +210,23 @@ def _markowitz_inter_ew_intra(
     window_returns: pd.DataFrame,
     labels: np.ndarray,
 ) -> pd.Series:
-    """
-    Strategy A: Markowitz between clusters, equal weight within.
+    """Apply Strategy A: Markowitz between clusters, equal weight within.
 
     Representative series per cluster = mean return series of cluster members.
     Cluster weights from Markowitz on representatives.
     Within-cluster weight = cluster_weight / cluster_size.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    labels : np.ndarray
+        One-dimensional array of cluster labels, one per asset.
+
+    Returns
+    -------
+    pd.Series
+        Non-negative portfolio weights indexed by ticker, summing to 1.0.
     """
     cluster_map = _build_cluster_map(labels, window_returns.columns)
     clusters    = sorted(cluster_map.keys())
@@ -150,11 +253,22 @@ def _ew_inter_markowitz_intra(
     window_returns: pd.DataFrame,
     labels: np.ndarray,
 ) -> pd.Series:
-    """
-    Strategy B: Equal weight between clusters, Markowitz within.
+    """Apply Strategy B: Equal weight between clusters, Markowitz within.
 
     Cluster budget = 1 / n_clusters.
     Within-cluster: Markowitz on cluster assets.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    labels : np.ndarray
+        One-dimensional array of cluster labels, one per asset.
+
+    Returns
+    -------
+    pd.Series
+        Non-negative portfolio weights indexed by ticker, summing to 1.0.
     """
     cluster_map   = _build_cluster_map(labels, window_returns.columns)
     clusters      = sorted(cluster_map.keys())
@@ -176,12 +290,23 @@ def _markowitz_inter_markowitz_intra(
     window_returns: pd.DataFrame,
     labels: np.ndarray,
 ) -> pd.Series:
-    """
-    Strategy C: Markowitz at both levels.
+    """Apply Strategy C: Markowitz at both the cluster and asset levels.
 
     Cluster weights from Markowitz on representative series.
     Within-cluster weights from Markowitz on cluster assets.
     Final weight = cluster_weight * intra_weight.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    labels : np.ndarray
+        One-dimensional array of cluster labels, one per asset.
+
+    Returns
+    -------
+    pd.Series
+        Non-negative portfolio weights indexed by ticker, summing to 1.0.
     """
     cluster_map = _build_cluster_map(labels, window_returns.columns)
     clusters    = sorted(cluster_map.keys())
@@ -211,6 +336,23 @@ def get_cluster_kmeans_markowitz_inter_ew_intra(
     global_k: int = 5,
     random_state: int = 42,
 ) -> pd.Series:
+    """
+    KMeans clustering with Markowitz between clusters and equal weight within clusters.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    global_k : int
+        Fixed number of clusters.
+    random_state : int
+        Random seed for reproducible clustering.
+
+    Returns
+    -------
+    pd.Series
+        Portfolio weights indexed by ticker.
+    """
     labels = _get_labels_kmeans(window_returns, global_k, random_state)
     return _markowitz_inter_ew_intra(window_returns, labels)
 
@@ -220,6 +362,23 @@ def get_cluster_kmeans_ew_inter_markowitz_intra(
     global_k: int = 5,
     random_state: int = 42,
 ) -> pd.Series:
+    """
+    KMeans clustering with equal weight between clusters and Markowitz within clusters.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    global_k : int
+        Fixed number of clusters.
+    random_state : int
+        Random seed for reproducible clustering.
+
+    Returns
+    -------
+    pd.Series
+        Portfolio weights indexed by ticker.
+    """
     labels = _get_labels_kmeans(window_returns, global_k, random_state)
     return _ew_inter_markowitz_intra(window_returns, labels)
 
@@ -229,6 +388,23 @@ def get_cluster_kmeans_markowitz_inter_markowitz_intra(
     global_k: int = 5,
     random_state: int = 42,
 ) -> pd.Series:
+    """
+    KMeans clustering with Markowitz optimization at both cluster and asset levels.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    global_k : int
+        Fixed number of clusters.
+    random_state : int
+        Random seed for reproducible clustering.
+
+    Returns
+    -------
+    pd.Series
+        Portfolio weights indexed by ticker.
+    """
     labels = _get_labels_kmeans(window_returns, global_k, random_state)
     return _markowitz_inter_markowitz_intra(window_returns, labels)
 
@@ -240,6 +416,27 @@ def get_cluster_kmedoids_dtw_markowitz_inter_ew_intra(
     dtw_n_jobs: int = -1,
     dtw_cache_dir: str | None = None,
 ) -> pd.Series:
+    """
+    KMedoids-DTW clustering with Markowitz between clusters and equal weight within clusters.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    global_k : int
+        Fixed number of clusters.
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_n_jobs : int
+        Number of parallel jobs for DTW computation (-1 = all cores).
+    dtw_cache_dir : str | None
+        DTW cache directory; if None, the project default is used.
+
+    Returns
+    -------
+    pd.Series
+        Portfolio weights indexed by ticker.
+    """
     labels = _get_labels_kmedoids(window_returns, global_k, random_state, dtw_n_jobs, dtw_cache_dir)
     return _markowitz_inter_ew_intra(window_returns, labels)
 
@@ -251,6 +448,27 @@ def get_cluster_kmedoids_dtw_ew_inter_markowitz_intra(
     dtw_n_jobs: int = -1,
     dtw_cache_dir: str | None = None,
 ) -> pd.Series:
+    """
+    KMedoids-DTW clustering with equal weight between clusters and Markowitz within clusters.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    global_k : int
+        Fixed number of clusters.
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_n_jobs : int
+        Number of parallel jobs for DTW computation (-1 = all cores).
+    dtw_cache_dir : str | None
+        DTW cache directory; if None, the project default is used.
+
+    Returns
+    -------
+    pd.Series
+        Portfolio weights indexed by ticker.
+    """
     labels = _get_labels_kmedoids(window_returns, global_k, random_state, dtw_n_jobs, dtw_cache_dir)
     return _ew_inter_markowitz_intra(window_returns, labels)
 
@@ -262,5 +480,26 @@ def get_cluster_kmedoids_dtw_markowitz_inter_markowitz_intra(
     dtw_n_jobs: int = -1,
     dtw_cache_dir: str | None = None,
 ) -> pd.Series:
+    """
+    KMedoids-DTW clustering with Markowitz optimization at both cluster and asset levels.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    global_k : int
+        Fixed number of clusters.
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_n_jobs : int
+        Number of parallel jobs for DTW computation (-1 = all cores).
+    dtw_cache_dir : str | None
+        DTW cache directory; if None, the project default is used.
+
+    Returns
+    -------
+    pd.Series
+        Portfolio weights indexed by ticker.
+    """
     labels = _get_labels_kmedoids(window_returns, global_k, random_state, dtw_n_jobs, dtw_cache_dir)
     return _markowitz_inter_markowitz_intra(window_returns, labels)

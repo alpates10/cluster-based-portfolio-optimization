@@ -58,6 +58,19 @@ _DTW_CACHE_DIR: str = str(
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _make_dtw_cache_key(window_returns: pd.DataFrame) -> str:
+    """
+    Build a deterministic SHA-256 digest from the window bounds and ticker list.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Returns matrix indexed by date with ticker symbols as columns.
+
+    Returns
+    -------
+    str
+        A 24-character hexadecimal digest suitable for use as a cache filename stem.
+    """
     idx = window_returns.index
     start = str(idx[0].date()) if hasattr(idx[0], "date") else str(idx[0])
     end = str(idx[-1].date()) if hasattr(idx[-1], "date") else str(idx[-1])
@@ -67,7 +80,20 @@ def _make_dtw_cache_key(window_returns: pd.DataFrame) -> str:
 
 
 def _sharpe_from_monthly(monthly_returns: pd.Series) -> float:
-    """Annualised Sharpe from monthly returns (rf=0)."""
+    """
+    Compute annualised Sharpe ratio from monthly returns (risk-free rate = 0).
+
+    Parameters
+    ----------
+    monthly_returns : pd.Series
+        Monthly return series.
+
+    Returns
+    -------
+    float
+        Annualised Sharpe ratio, or -inf when fewer than two observations
+        exist or volatility is zero.
+    """
     if len(monthly_returns) < 2:
         return -np.inf
     mu = float(monthly_returns.mean()) * 12.0
@@ -81,10 +107,24 @@ def _select_k_by_sharpe(
     val_returns_by_k: dict[int, pd.Series],
     val_window: int,
 ) -> tuple[int, float]:
-    """Return (selected_k, best_sharpe).
+    """
+    Select the k with the highest annualised Sharpe over the last val_window months.
 
-    Falls back to ``FALLBACK_K`` / NaN when any k lacks ``val_window`` months
-    of history (i.e., during the warm-up phase).
+    Falls back to FALLBACK_K when any k lacks val_window months of history
+    (i.e., during the warm-up phase).
+
+    Parameters
+    ----------
+    val_returns_by_k : dict[int, pd.Series]
+        Accumulated monthly return history keyed by k value.
+    val_window : int
+        Number of past months used to evaluate Sharpe for each k.
+
+    Returns
+    -------
+    tuple[int, float]
+        (selected_k, best_sharpe). best_sharpe is NaN when falling back
+        to FALLBACK_K due to insufficient history.
     """
     if not val_returns_by_k:
         return FALLBACK_K, float("nan")
@@ -112,7 +152,19 @@ def _select_k_by_sharpe(
 
 
 def _markowitz_or_ew(cluster_returns: pd.DataFrame) -> pd.Series:
-    """Max-Sharpe within a cluster; falls back to equal weight on any failure."""
+    """
+    Compute max-Sharpe weights within a cluster; fall back to equal weight on any failure.
+
+    Parameters
+    ----------
+    cluster_returns : pd.DataFrame
+        Daily returns matrix for the assets in a single cluster.
+
+    Returns
+    -------
+    pd.Series
+        Portfolio weights indexed by ticker, summing to 1.0.
+    """
     n = len(cluster_returns.columns)
     ew = pd.Series(1.0 / n, index=cluster_returns.columns, dtype="float64")
     if n < 2:
@@ -143,10 +195,22 @@ def _cluster_mv_from_labels(
     labels: np.ndarray,
     window_returns: pd.DataFrame,
 ) -> pd.Series:
-    """Equal-weight between clusters, MV (max-Sharpe) within each cluster.
+    """
+    Build portfolio weights: equal weight between clusters, max-Sharpe within each cluster.
 
     Falls back to equal weight within a cluster when MV optimisation fails.
-    The result is always non-negative and sums to 1.
+
+    Parameters
+    ----------
+    labels : np.ndarray
+        One-dimensional array of cluster labels, length n_assets.
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+
+    Returns
+    -------
+    pd.Series
+        Non-negative portfolio weights indexed by ticker, summing to 1.0.
     """
     asset_index = window_returns.columns
     unique_clusters = np.unique(labels)
@@ -185,11 +249,25 @@ def get_cluster_kmeans_rolling_val_ew(
     val_window: int,
     random_state: int = 42,
 ) -> tuple[pd.Series, dict]:
-    """KMeans + EW with rolling-validation k selection.
+    """
+    KMeans clustering with equal-weight allocation and rolling-validation k selection.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    val_returns_by_k : dict[int, pd.Series]
+        Accumulated monthly return history keyed by k value.
+    val_window : int
+        Number of past months used to evaluate Sharpe for k selection.
+    random_state : int
+        Random seed for reproducible clustering.
 
     Returns
     -------
-    (weights, {"selected_k": int, "best_sharpe": float})
+    tuple[pd.Series, dict]
+        Portfolio weights indexed by ticker, and metadata dict with
+        'selected_k' (int) and 'best_sharpe' (float).
     """
     selected_k, best_sharpe = _select_k_by_sharpe(val_returns_by_k, val_window)
 
@@ -206,13 +284,28 @@ def get_cluster_kmeans_rolling_val_mv(
     val_window: int,
     random_state: int = 42,
 ) -> tuple[pd.Series, dict]:
-    """KMeans + MV (EW between clusters, max-Sharpe within) with rolling-validation k selection.
+    """
+    KMeans clustering with MV allocation and rolling-validation k selection.
 
-    Falls back to EW within each cluster when MV optimisation fails.
+    Uses equal weight between clusters and max-Sharpe within each cluster.
+    Falls back to equal weight within a cluster when MV optimisation fails.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    val_returns_by_k : dict[int, pd.Series]
+        Accumulated monthly return history keyed by k value.
+    val_window : int
+        Number of past months used to evaluate Sharpe for k selection.
+    random_state : int
+        Random seed for reproducible clustering.
 
     Returns
     -------
-    (weights, {"selected_k": int, "best_sharpe": float})
+    tuple[pd.Series, dict]
+        Portfolio weights indexed by ticker, and metadata dict with
+        'selected_k' (int) and 'best_sharpe' (float).
     """
     selected_k, best_sharpe = _select_k_by_sharpe(val_returns_by_k, val_window)
 
@@ -230,14 +323,30 @@ def get_cluster_kmedoids_dtw_rolling_val_ew(
     random_state: int = 42,
     dtw_cache_dir: str | None = None,
 ) -> tuple[pd.Series, dict]:
-    """KMedoids-DTW + EW with rolling-validation k selection.
+    """
+    KMedoids-DTW clustering with equal-weight allocation and rolling-validation k selection.
 
-    The DTW distance matrix is cached in ``dtw_cache_dir`` (or the project
-    default) so repeated calls for the same estimation window are cheap.
+    The DTW distance matrix is cached so repeated calls for the same
+    estimation window are cheap.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    val_returns_by_k : dict[int, pd.Series]
+        Accumulated monthly return history keyed by k value.
+    val_window : int
+        Number of past months used to evaluate Sharpe for k selection.
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_cache_dir : str | None
+        Directory for the DTW distance matrix cache; None uses the project default.
 
     Returns
     -------
-    (weights, {"selected_k": int, "best_sharpe": float})
+    tuple[pd.Series, dict]
+        Portfolio weights indexed by ticker, and metadata dict with
+        'selected_k' (int) and 'best_sharpe' (float).
     """
     selected_k, best_sharpe = _select_k_by_sharpe(val_returns_by_k, val_window)
 
@@ -263,13 +372,30 @@ def get_cluster_kmedoids_dtw_rolling_val_mv(
     random_state: int = 42,
     dtw_cache_dir: str | None = None,
 ) -> tuple[pd.Series, dict]:
-    """KMedoids-DTW + MV (EW between clusters, max-Sharpe within) with rolling-validation k selection.
+    """
+    KMedoids-DTW clustering with MV allocation and rolling-validation k selection.
 
-    Falls back to EW within each cluster when MV optimisation fails.
+    Uses equal weight between clusters and max-Sharpe within each cluster.
+    Falls back to equal weight within a cluster when MV optimisation fails.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    val_returns_by_k : dict[int, pd.Series]
+        Accumulated monthly return history keyed by k value.
+    val_window : int
+        Number of past months used to evaluate Sharpe for k selection.
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_cache_dir : str | None
+        Directory for the DTW distance matrix cache; None uses the project default.
 
     Returns
     -------
-    (weights, {"selected_k": int, "best_sharpe": float})
+    tuple[pd.Series, dict]
+        Portfolio weights indexed by ticker, and metadata dict with
+        'selected_k' (int) and 'best_sharpe' (float).
     """
     selected_k, best_sharpe = _select_k_by_sharpe(val_returns_by_k, val_window)
 

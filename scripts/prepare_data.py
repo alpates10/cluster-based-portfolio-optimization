@@ -16,7 +16,19 @@ from src.paths import get_raw_dir, get_processed_dir, UNIVERSE_CHOICES
 
 
 def load_close_series(fp: Path) -> pd.Series:
-    """Read one CSV and return a Close price series indexed by Date."""
+    """Read one CSV and return a Close price series indexed by Date.
+
+    Parameters
+    ----------
+    fp : Path
+        Path to a raw ticker CSV with ``Date`` and ``Close`` columns.
+
+    Returns
+    -------
+    pd.Series
+        Positive, non-duplicate Close prices with a DatetimeIndex,
+        named after the file stem.
+    """
     df = pd.read_csv(fp)
     if "Date" not in df.columns or "Close" not in df.columns:
         raise ValueError(f"{fp.name}: expected columns Date and Close, got {list(df.columns)}")
@@ -34,6 +46,7 @@ def load_close_series(fp: Path) -> pd.Series:
 
 
 def main():
+    """Prepare cleaned return data, universe metadata, and data notes for one universe."""
     parser = argparse.ArgumentParser(description="Prepare return data for a given universe.")
     parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
     parser.add_argument("--start_date", default="2005-01-01", metavar="YYYY-MM-DD")

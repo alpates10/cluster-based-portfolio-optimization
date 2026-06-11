@@ -18,6 +18,20 @@ ESTIMATION_WINDOW = 756
 
 
 def load_close_series(fp: Path) -> pd.Series | None:
+    """Load a positive Close-price series from one raw CSV, or return None on failure.
+
+    Parameters
+    ----------
+    fp : Path
+        Path to a raw ticker CSV containing ``Date`` and ``Close`` columns.
+
+    Returns
+    -------
+    pd.Series or None
+        Positive, deduplicated Close prices with a DatetimeIndex, named
+        after the file stem; ``None`` if the file is missing required
+        columns or raises any exception during loading.
+    """
     try:
         df = pd.read_csv(fp)
         if "Date" not in df.columns or "Close" not in df.columns:
@@ -39,6 +53,27 @@ def simulate_pipeline(
     coverage_threshold: float,
     drop_worst_k: int,
 ) -> dict:
+    """Simulate the data-preparation filters for one parameter combination.
+
+    Parameters
+    ----------
+    prices_wide : pd.DataFrame
+        Wide-format daily close prices, columns = tickers.
+    start_year : int
+        First calendar year to include in the backtest window.
+    coverage_threshold : float
+        Minimum fraction of non-NaN observations required to keep a
+        ticker after the start-year cutoff.
+    drop_worst_k : int
+        Number of tickers with the highest return-NaN rate to remove
+        after the coverage filter.
+
+    Returns
+    -------
+    dict
+        Keys: ``eligible``, ``after_coverage``, ``final_universe``,
+        ``final_days`` — all integer counts.
+    """
     start_date = pd.Timestamp(f"{start_year}-01-01")
     prices_after = prices_wide.loc[prices_wide.index >= start_date].copy()
 
@@ -66,6 +101,7 @@ def simulate_pipeline(
 
 
 def main():
+    """Parse CLI arguments and print universe coverage simulation tables."""
     parser = argparse.ArgumentParser(
         description="Simulate prepare_data filtering across start years and parameter combos."
     )

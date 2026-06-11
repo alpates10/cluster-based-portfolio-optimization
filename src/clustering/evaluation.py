@@ -10,8 +10,20 @@ from src.clustering.distances import compute_distance_matrix
 
 def cluster_size_balance(labels: np.ndarray) -> float:
     """
-    Lower is better.
-    Uses coefficient of variation = std(cluster_sizes) / mean(cluster_sizes).
+    Compute cluster size balance as coefficient of variation (lower is better).
+
+    Calculated as std(cluster_sizes) / mean(cluster_sizes).
+
+    Parameters
+    ----------
+    labels : np.ndarray
+        One-dimensional array of cluster labels.
+
+    Returns
+    -------
+    float
+        Coefficient of variation of cluster sizes; NaN if there are no clusters
+        or mean cluster size is zero.
     """
     unique, counts = np.unique(labels, return_counts=True)
     if unique.size == 0:
@@ -24,8 +36,20 @@ def cluster_size_balance(labels: np.ndarray) -> float:
 
 def davies_bouldin_from_distance(distance_matrix: np.ndarray, labels: np.ndarray) -> float:
     """
-    Distance-matrix variant of Davies-Bouldin index.
-    Lower is better.
+    Compute the Davies-Bouldin index from a precomputed distance matrix (lower is better).
+
+    Parameters
+    ----------
+    distance_matrix : np.ndarray
+        Square symmetric distance matrix of shape (n_assets, n_assets).
+    labels : np.ndarray
+        One-dimensional array of cluster labels, length n_assets.
+
+    Returns
+    -------
+    float
+        Davies-Bouldin index; NaN if fewer than two clusters exist or
+        any cluster is empty.
     """
     unique_labels = np.unique(labels)
     n_clusters = len(unique_labels)
@@ -79,7 +103,32 @@ def evaluate_clustering_config(
     dtw_cache_key: str | None = None,
 ) -> dict:
     """
-    Evaluate one (method, distance, k) configuration.
+    Evaluate a single (method, distance, k) clustering configuration.
+
+    Parameters
+    ----------
+    asset_return_matrix : np.ndarray
+        Shape (n_assets, window_length).
+    method : str
+        Clustering algorithm: 'kmeans' or 'kmedoids'.
+    distance : str
+        Distance metric: 'euclidean', 'dtw', or 'correlation'.
+    k : int
+        Number of clusters to evaluate.
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_n_jobs : int
+        Parallel jobs for DTW computation (-1 = all cores).
+    dtw_cache_dir : str | None
+        Directory for DTW distance matrix cache.
+    dtw_cache_key : str | None
+        Explicit cache filename stem for DTW.
+
+    Returns
+    -------
+    dict
+        Keys: 'status' ('ok', 'skip', or 'error'), 'notes', 'silhouette_score',
+        'davies_bouldin', 'cluster_balance', 'n_clusters_found'.
     """
     method_key = method.lower()
     distance_key = distance.lower()
@@ -105,7 +154,7 @@ def evaluate_clustering_config(
             sil = np.nan
             db = np.nan
             if k == 1:
-                sil = 0.0  # tek cluster: silhouette tanımsız, 0 olarak gösterilir
+                sil = 0.0  # One cluster: silhouette is undefined, displayed as 0.
             elif 2 <= n_clusters_found < asset_return_matrix.shape[0]:
                 sil = float(silhouette_score(asset_return_matrix, labels, metric="euclidean"))
                 db = float(davies_bouldin_score(asset_return_matrix, labels))
@@ -137,7 +186,7 @@ def evaluate_clustering_config(
             sil = np.nan
             db = np.nan
             if k == 1:
-                sil = 0.0  # tek cluster: silhouette tanımsız, 0 olarak gösterilir
+                sil = 0.0  # One cluster: silhouette is undefined, displayed as 0.
             elif 2 <= n_clusters_found < asset_return_matrix.shape[0]:
                 sil = float(silhouette_score(dist, labels, metric="precomputed"))
                 db = float(davies_bouldin_from_distance(dist, labels))
@@ -166,12 +215,25 @@ def recommend_global_k(
     results_df: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Recommend k per (method, distance) using rank aggregation across windows.
+    Recommend the best k per (method, distance) pair using rank aggregation across windows.
 
-    Ranking objective:
-    - silhouette_score: higher better
-    - davies_bouldin: lower better
-    - cluster_balance: lower better
+    Ranking objective: silhouette_score (higher is better), davies_bouldin (lower is better),
+    cluster_balance (lower is better). Each metric is ranked per window and the composite
+    mean rank across windows determines the recommended k.
+
+    Parameters
+    ----------
+    results_df : pd.DataFrame
+        Output of evaluate_clustering_config calls; must contain columns
+        'status', 'method', 'distance', 'k', 'window_id', 'silhouette_score',
+        'davies_bouldin', and 'cluster_balance'.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per (method, distance) with columns 'method', 'distance',
+        'recommended_k', 'mean_composite_rank', and 'reason'.
+        Returns an empty DataFrame if no valid results exist.
     """
     if results_df.empty:
         return pd.DataFrame()

@@ -68,6 +68,11 @@ def make_permuted_strategy(
         (same default as live strategies).
     dtw_n_jobs : int
         Parallelism for DTW distance computation (kmedoids only).
+
+    Returns
+    -------
+    Callable[[pd.DataFrame], pd.Series]
+        Strategy function that accepts window returns and returns permuted weights.
     """
     if method not in ("kmeans", "kmedoids"):
         raise ValueError(f"method must be 'kmeans' or 'kmedoids', got {method!r}")
@@ -75,6 +80,25 @@ def make_permuted_strategy(
     rng = np.random.default_rng(seed)
 
     def _strategy(window_returns: pd.DataFrame) -> pd.Series:
+        """Compute permuted-label EW-inter/Markowitz-intra weights for one window.
+
+        Clusters the assets in ``window_returns`` with the configured
+        method, randomly shuffles the resulting cluster labels, and then
+        applies equal-weight inter-cluster / Markowitz intra-cluster
+        allocation on the shuffled assignment.
+
+        Parameters
+        ----------
+        window_returns : pd.DataFrame
+            Daily return matrix for the estimation window, shape
+            ``(n_days, n_assets)``.
+
+        Returns
+        -------
+        pd.Series
+            Portfolio weights indexed by asset ticker, non-negative and
+            summing to 1.
+        """
         if method == "kmeans":
             labels = _get_labels_kmeans(window_returns, global_k=k, random_state=random_state)
         else:

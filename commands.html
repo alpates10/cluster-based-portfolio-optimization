@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Çalıştırma Komutları</title>
+<title>Run Commands</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -110,33 +110,33 @@
 </head>
 <body>
 
-<h1>Portfolio Robustness — Çalıştırma Komutları</h1>
+<h1>Cluster-Based Portfolio Optimization — Run Commands</h1>
 
 <div class="section">
-  <div class="section-title">Tam Pipeline</div>
+  <div class="section-title">Full Pipeline</div>
   <div class="cmd-row">
-    <span class="cmd-desc">sp500 — sıfırdan tüm adımlar</span>
+    <span class="cmd-desc">sp500 — all steps from scratch</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_all.py</span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">bist100 — sıfırdan tüm adımlar</span>
+    <span class="cmd-desc">bist100 — all steps from scratch</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_all.py <span class="flag">--universe</span> <span class="val">bist100</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">nifty50 — sıfırdan tüm adımlar</span>
+    <span class="cmd-desc">nifty50 — all steps from scratch</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_all.py <span class="flag">--universe</span> <span class="val">nifty50</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">sp500 — dry-run (komutları listele)</span>
+    <span class="cmd-desc">sp500 — dry-run (list commands)</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_all.py <span class="flag">--dry-run</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
@@ -145,7 +145,7 @@
 </div>
 
 <div class="section">
-  <div class="section-title">Veri Hazırlığı</div>
+  <div class="section-title">Data Preparation</div>
   <div class="cmd-row">
     <span class="cmd-desc">bist100 — coverage × drop_k grid</span>
     <div class="cmd-cell" onclick="copy(this)">
@@ -163,41 +163,34 @@
 </div>
 
 <div class="section">
-  <div class="section-title">Clustering Analizi</div>
+  <div class="section-title">Clustering Analysis</div>
   <div class="cmd-row">
-    <span class="cmd-desc">Silhouette ve elbow analizleri</span>
+    <span class="cmd-desc">Silhouette and elbow analyses</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/analyze_clustering_k.py</span>
-      <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
-    </div>
-  </div>
-  <div class="cmd-row">
-    <span class="cmd-desc">k seçim yöntemi analizi</span>
-    <div class="cmd-cell" onclick="copy(this)">
-      <span class="cmd-text">python experiments/k_selection_analysis.py</span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
 </div>
 
 <div class="section">
-  <div class="section-title">Backtest Çalıştırma</div>
+  <div class="section-title">Run Backtest</div>
   <div class="cmd-row">
-    <span class="cmd-desc">Klasik stratejiler</span>
+    <span class="cmd-desc">Classical strategies</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">classical</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">KMeans EW — eksik k değerleri</span>
+    <span class="cmd-desc">KMeans EW — missing k values</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">kmeans</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">KMedoids DTW EW — eksik k değerleri</span>
+    <span class="cmd-desc">KMedoids DTW EW — missing k values</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">kmedoids</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
@@ -225,49 +218,49 @@
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">Adaptive Markowitz (6 strateji)</span>
+    <span class="cmd-desc">Adaptive Markowitz (6 strategies)</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">adaptive_markowitz</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">Tümü — checkpoint aktif</span>
+    <span class="cmd-desc">All — checkpoint active</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_backtest.py <span class="flag">--mode</span> <span class="val">all</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">Rolling val — eksik kombinasyonlar</span>
+    <span class="cmd-desc">Rolling val — missing combinations</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_rolling_validation_backtest.py</span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">Rolling val — sıfırdan yeniden hesapla</span>
+    <span class="cmd-desc">Rolling val — recompute from scratch</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_rolling_validation_backtest.py <span class="flag">--force</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">Rolling val — tek kombinasyon örneği</span>
+    <span class="cmd-desc">Rolling val — single combination example</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_rolling_validation_backtest.py <span class="flag">--method</span> <span class="val">kmeans</span> <span class="flag">--weighting</span> <span class="val">ew</span> <span class="flag">--val_window</span> <span class="val">12</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">Permutation — tümü, her k, 5 seed</span>
+    <span class="cmd-desc">Permutation — all, every k, 5 seeds</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_permutation_backtest.py <span class="flag">--method</span> <span class="val">both</span> <span class="flag">--n_seeds</span> <span class="val">5</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">Permutation — belirli k değerleri</span>
+    <span class="cmd-desc">Permutation — specific k values</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/run_permutation_backtest.py <span class="flag">--method</span> <span class="val">kmeans</span> <span class="flag">--k_values</span> <span class="val">3 5 7</span> <span class="flag">--n_seeds</span> <span class="val">5</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
@@ -276,9 +269,9 @@
 </div>
 
 <div class="section">
-  <div class="section-title">Raporlama</div>
+  <div class="section-title">Reporting</div>
   <div class="cmd-row">
-    <span class="cmd-desc">Klasik → summary/classical/</span>
+    <span class="cmd-desc">Classical → summary/classical/</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/make_performance_report.py <span class="flag">--mode</span> <span class="val">classical</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
@@ -299,28 +292,28 @@
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">Tümü, 12m hizalı → summary/all/</span>
+    <span class="cmd-desc">All, 12m aligned → summary/all/</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/make_performance_report.py <span class="flag">--mode</span> <span class="val">all</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">Rolling val hariç → summary/all_no_rolling/</span>
+    <span class="cmd-desc">Excl. rolling val → summary/all_no_rolling/</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/make_performance_report.py <span class="flag">--mode</span> <span class="val">all_no_rolling</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">Tümü + rolling val → summary/all/</span>
+    <span class="cmd-desc">All + rolling val → summary/all/</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/make_performance_report.py <span class="flag">--mode</span> <span class="val">all</span></span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
     </div>
   </div>
   <div class="cmd-row">
-    <span class="cmd-desc">Özet raporu → permutation_summary/</span>
+    <span class="cmd-desc">Summary report → permutation_summary/</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/make_permutation_summary.py</span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
@@ -329,9 +322,9 @@
 </div>
 
 <div class="section">
-  <div class="section-title">Görselleştirme</div>
+  <div class="section-title">Visualization</div>
   <div class="cmd-row">
-    <span class="cmd-desc">MDS ve clustering görselleri</span>
+    <span class="cmd-desc">MDS and clustering visuals</span>
     <div class="cmd-cell" onclick="copy(this)">
       <span class="cmd-text">python scripts/make_clustering_plots.py</span>
       <svg class="copy-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V3h8"/></svg>
@@ -339,7 +332,7 @@
   </div>
 </div>
 
-<div class="toast" id="toast">kopyalandı</div>
+<div class="toast" id="toast">copied</div>
 
 <script>
 function copy(el) {

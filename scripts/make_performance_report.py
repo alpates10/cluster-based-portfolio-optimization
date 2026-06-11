@@ -64,6 +64,19 @@ SUMMARY_ROOT = PROJECT_ROOT / "data" / "processed" / "backtests" / "summary"  # 
 
 
 def _classical_dirs(backtests_dir: Path) -> list[Path]:
+    """Return existing classical baseline strategy directories.
+
+    Parameters
+    ----------
+    backtests_dir : Path
+        Root backtests output directory to scan.
+
+    Returns
+    -------
+    list[Path]
+        Sorted list of directories whose names match the classical
+        strategy names (equal_weight, mean_variance, gmv).
+    """
     return [
         p for p in sorted(backtests_dir.iterdir())
         if p.is_dir() and p.name in CLASSICAL_NAMES
@@ -104,7 +117,20 @@ def _clustering_dirs(backtests_dir: Path) -> list[Path]:
 
 
 def _rolling_validation_dirs(backtests_dir: Path) -> list[Path]:
-    """Auto-discover all strategy directories under rolling_validation/."""
+    """Auto-discover all strategy directories under rolling_validation/.
+
+    Parameters
+    ----------
+    backtests_dir : Path
+        Root backtests output directory; the function looks inside
+        ``<backtests_dir>/rolling_validation/``.
+
+    Returns
+    -------
+    list[Path]
+        Sorted list of non-hidden subdirectories found there, or an
+        empty list if the ``rolling_validation`` folder does not exist.
+    """
     rv_root = backtests_dir / "rolling_validation"
     if not rv_root.exists():
         return []
@@ -248,14 +274,18 @@ def _build_and_save(
     )
 
     save_monthly_returns_comparison_table(monthly_df, out_dir / "monthly_returns_comparison.csv")
-    save_rolling_sharpe_comparison_table(rolling_sharpe_df, out_dir / "rolling_sharpe_comparison.csv")
+    save_rolling_sharpe_comparison_table(
+        rolling_sharpe_df, out_dir / "rolling_sharpe_comparison.csv"
+    )
     if not summary_df.empty:
         save_summary_metrics_table(summary_df, out_dir / "summary_metrics.csv")
         save_summary_metrics_excel(summary_df, out_dir / "summary_metrics.xlsx")
 
-    print(f"  Monthly comparison  : {out_dir / 'monthly_returns_comparison.csv'}  shape={monthly_df.shape}")
+    print(f"  Monthly comparison  : {out_dir / 'monthly_returns_comparison.csv'}"
+          f"  shape={monthly_df.shape}")
     print(f"  Summary metrics     : {out_dir / 'summary_metrics.csv'}  rows={len(summary_df)}")
-    print(f"  Rolling Sharpe      : {out_dir / 'rolling_sharpe_comparison.csv'}  shape={rolling_sharpe_df.shape}")
+    print(f"  Rolling Sharpe      : {out_dir / 'rolling_sharpe_comparison.csv'}"
+          f"  shape={rolling_sharpe_df.shape}")
     print(f"  Strategies: {', '.join(monthly_df.columns)}")
 
     for line in monthly_logs + summary_logs:
@@ -301,15 +331,19 @@ def _build_and_save_aligned(
     )
 
     save_monthly_returns_comparison_table(monthly_df, out_dir / "monthly_returns_comparison.csv")
-    save_rolling_sharpe_comparison_table(rolling_sharpe_df, out_dir / "rolling_sharpe_comparison.csv")
+    save_rolling_sharpe_comparison_table(
+        rolling_sharpe_df, out_dir / "rolling_sharpe_comparison.csv"
+    )
     if not summary_df.empty:
         save_summary_metrics_table(summary_df, out_dir / "summary_metrics.csv")
         save_summary_metrics_excel(summary_df, out_dir / "summary_metrics.xlsx")
 
     print(f"  Aligned from        : {align_start.date()}")
-    print(f"  Monthly comparison  : {out_dir / 'monthly_returns_comparison.csv'}  shape={monthly_df.shape}")
+    print(f"  Monthly comparison  : {out_dir / 'monthly_returns_comparison.csv'}"
+          f"  shape={monthly_df.shape}")
     print(f"  Summary metrics     : {out_dir / 'summary_metrics.csv'}  rows={len(summary_df)}")
-    print(f"  Rolling Sharpe      : {out_dir / 'rolling_sharpe_comparison.csv'}  shape={rolling_sharpe_df.shape}")
+    print(f"  Rolling Sharpe      : {out_dir / 'rolling_sharpe_comparison.csv'}"
+          f"  shape={rolling_sharpe_df.shape}")
     print(f"  Strategies: {', '.join(monthly_df.columns)}")
 
     for line in monthly_logs:
@@ -321,16 +355,33 @@ def _build_and_save_aligned(
 # ── All-mode Excel formatting (group colors + legend) ─────────────────────────
 
 def _strategy_group_color(name: str) -> str | None:
-    """Return the pastel hex fill color for a strategy, or None if unmatched."""
+    """Return the pastel hex fill color for a strategy, or None if unmatched.
+
+    Parameters
+    ----------
+    name : str
+        Strategy name as it appears in the summary DataFrame's
+        ``strategy`` column.
+
+    Returns
+    -------
+    str or None
+        Six-character hex color code (without ``#``) for the strategy's
+        group, or ``None`` if the name does not match any known group.
+    """
     if name in {"equal_weight", "mean_variance", "gmv"}:
         return "D9D9D9"
     if name.startswith("kmeans_k"):
         return "C9B8E8"
     if name.startswith("kmedoids_dtw_k"):
         return "B8D4F0"
-    if name.startswith("kmeans_") and ("markowitz" in name or "ew_inter" in name) and "adaptive" not in name:
+    if (name.startswith("kmeans_")
+            and ("markowitz" in name or "ew_inter" in name)
+            and "adaptive" not in name):
         return "B8E8D4"
-    if name.startswith("kmedoids_dtw_") and ("markowitz" in name or "ew_inter" in name) and "adaptive" not in name:
+    if (name.startswith("kmedoids_dtw_")
+            and ("markowitz" in name or "ew_inter" in name)
+            and "adaptive" not in name):
         return "F0D4B8"
     if "adaptive" in name:
         return "F0B8C8"
@@ -341,17 +392,26 @@ def _strategy_group_color(name: str) -> str | None:
 
 _LEGEND_ROWS = [
     ("D9D9D9", "Classical baselines",      "EW, Mean-Variance, GMV"),
-    ("C9B8E8", "KMeans EW",               "Sabit k, Euclidean clustering"),
-    ("B8D4F0", "KMedoids DTW EW",         "Sabit k, DTW clustering"),
-    ("B8E8D4", "KMeans Markowitz",        "Sabit k, Markowitz optimizasyonu"),
-    ("F0D4B8", "KMedoids DTW Markowitz",  "Sabit k, DTW + Markowitz"),
-    ("F0B8C8", "Adaptive silhouette",     "Dinamik k, silhouette bazlı"),
-    ("E8E8B8", "Rolling validation",      "Dinamik k, performans bazlı"),
+    ("C9B8E8", "KMeans EW",               "Fixed k, Euclidean clustering"),
+    ("B8D4F0", "KMedoids DTW EW",         "Fixed k, DTW clustering"),
+    ("B8E8D4", "KMeans Markowitz",        "Fixed k, Markowitz optimization"),
+    ("F0D4B8", "KMedoids DTW Markowitz",  "Fixed k, DTW + Markowitz"),
+    ("F0B8C8", "Adaptive silhouette",     "Dynamic k, silhouette-based"),
+    ("E8E8B8", "Rolling validation",      "Dynamic k, performance-based"),
 ]
 
 
 def _apply_all_mode_excel_formatting(excel_path: Path, summary_df: pd.DataFrame) -> None:
-    """Open the saved xlsx and apply group-based Strategy column colors + legend."""
+    """Open the saved xlsx and apply group-based Strategy column colors + legend.
+
+    Parameters
+    ----------
+    excel_path : Path
+        Path to the already-saved ``.xlsx`` file to be formatted in-place.
+    summary_df : pd.DataFrame
+        Summary metrics DataFrame; its column count determines where the
+        legend block is placed.
+    """
     try:
         from openpyxl import load_workbook
         from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -388,7 +448,7 @@ def _apply_all_mode_excel_formatting(excel_path: Path, summary_df: pd.DataFrame)
     bold = Font(bold=True)
     center = Alignment(horizontal="center", vertical="center")
 
-    for offset, label in enumerate(["Renk", "Grup", "Açıklama"]):
+    for offset, label in enumerate(["Color", "Group", "Description"]):
         c = ws.cell(row=1, column=legend_col + offset)
         c.value = label
         c.fill = header_fill
@@ -419,6 +479,19 @@ def _apply_all_mode_excel_formatting(excel_path: Path, summary_df: pd.DataFrame)
 # ── Per-mode runners ───────────────────────────────────────────────────────────
 
 def _run_classical(backtests_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build and print reports for classical baseline strategies.
+
+    Parameters
+    ----------
+    backtests_dir : Path
+        Root backtests output directory for the selected universe.
+
+    Returns
+    -------
+    tuple[pd.DataFrame, pd.DataFrame]
+        ``(monthly_df, summary_df)`` — monthly returns comparison table
+        and per-strategy summary metrics table.
+    """
     print("\n=== MODE: classical ===")
     strategy_dirs = _classical_dirs(backtests_dir)
     if not strategy_dirs:
@@ -436,10 +509,26 @@ def _run_classical(backtests_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def _run_clustering(backtests_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build and print reports for clustering strategy directories.
+
+    Parameters
+    ----------
+    backtests_dir : Path
+        Root backtests output directory for the selected universe.
+
+    Returns
+    -------
+    tuple[pd.DataFrame, pd.DataFrame]
+        ``(monthly_df, summary_df)`` — monthly returns comparison table
+        and per-strategy summary metrics table.
+    """
     print("\n=== MODE: clustering ===")
     strategy_dirs = _clustering_dirs(backtests_dir)
     if not strategy_dirs:
-        print("[WARN] No clustering sub-folders found — run scripts/run_backtest.py --mode kmeans/kmedoids first.")
+        print(
+            "[WARN] No clustering sub-folders found — "
+            "run scripts/run_backtest.py --mode kmeans/kmedoids first."
+        )
         return pd.DataFrame(), pd.DataFrame()
 
     out_dir = SUMMARY_ROOT / "clustering"
@@ -453,6 +542,19 @@ def _run_clustering(backtests_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def _run_rolling_validation(backtests_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Build and print reports for rolling-validation strategy directories.
+
+    Parameters
+    ----------
+    backtests_dir : Path
+        Root backtests output directory for the selected universe.
+
+    Returns
+    -------
+    tuple[pd.DataFrame, pd.DataFrame]
+        ``(monthly_df, summary_df)`` — monthly returns comparison table
+        and per-strategy summary metrics table.
+    """
     print("\n=== MODE: rolling_validation ===")
     strategy_dirs = _rolling_validation_dirs(backtests_dir)
     if not strategy_dirs:
@@ -475,7 +577,13 @@ def _run_rolling_validation(backtests_dir: Path) -> tuple[pd.DataFrame, pd.DataF
 
 
 def _run_all(backtests_dir: Path) -> None:
-    """classical + clustering + rolling_validation, aligned to 12m start date."""
+    """classical + clustering + rolling_validation, aligned to 12m start date.
+
+    Parameters
+    ----------
+    backtests_dir : Path
+        Root backtests output directory for the selected universe.
+    """
     print("\n=== MODE: all ===")
 
     all_dirs = (
@@ -519,7 +627,13 @@ def _run_all(backtests_dir: Path) -> None:
 
 
 def _run_all_no_rolling(backtests_dir: Path) -> None:
-    """classical + clustering only, no alignment (each strategy's natural start)."""
+    """classical + clustering only, no alignment (each strategy's natural start).
+
+    Parameters
+    ----------
+    backtests_dir : Path
+        Root backtests output directory for the selected universe.
+    """
     print("\n=== MODE: all_no_rolling ===")
 
     all_dirs = _classical_dirs(backtests_dir) + _clustering_dirs(backtests_dir)
@@ -543,7 +657,14 @@ def _run_all_no_rolling(backtests_dir: Path) -> None:
 # ── Legacy cleanup ─────────────────────────────────────────────────────────────
 
 def _delete_legacy_files(backtests_dir: Path) -> None:
-    """Remove old flat summary files from backtests/ root (now kept in summary/)."""
+    """Remove old flat summary files from backtests/ root (now kept in summary/).
+
+    Parameters
+    ----------
+    backtests_dir : Path
+        Root backtests output directory; legacy files at this level are
+        deleted if present.
+    """
     legacy = [
         "summary_metrics.csv",
         "summary_metrics.xlsx",
@@ -560,6 +681,7 @@ def _delete_legacy_files(backtests_dir: Path) -> None:
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    """Parse CLI arguments and dispatch the requested performance report mode."""
     parser = argparse.ArgumentParser(description="Generate performance reports.")
     parser.add_argument(
         "--mode",

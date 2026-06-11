@@ -19,10 +19,22 @@ _DTW_CACHE_DIR: str = str(
 
 
 def _make_dtw_cache_key(window_returns: pd.DataFrame) -> str:
-    """
-    Build a deterministic hash from (start_date, end_date, sorted_tickers).
-    This uniquely identifies a rebalance window so the DTW matrix can be
-    cached on disk and reused across multiple k values or runs.
+    """Build a deterministic hash from (start_date, end_date, sorted_tickers).
+
+    Uniquely identifies a rebalance window so the DTW matrix can be cached
+    on disk and reused across multiple k values or runs.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window, indexed by date
+        with ticker symbols as columns.
+
+    Returns
+    -------
+    str
+        A 24-character hexadecimal SHA-256 digest suitable for use as a
+        cache filename stem.
     """
     idx = window_returns.index
     start = str(idx[0].date()) if hasattr(idx[0], "date") else str(idx[0])
@@ -38,6 +50,25 @@ def cluster_labels_kmeans_raw(
     global_k: int = 5,
     random_state: int = 42,
 ) -> np.ndarray:
+    """
+    Cluster assets with KMeans on raw return vectors.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    k_mode : str
+        Cluster-count selection mode. Currently only 'global' is supported.
+    global_k : int
+        Fixed number of clusters used when k_mode='global'.
+    random_state : int
+        Random seed for reproducible clustering.
+
+    Returns
+    -------
+    np.ndarray
+        One-dimensional array of cluster labels, one label per asset.
+    """
     asset_matrix = raw_return_representation(window_returns)
     n_clusters = resolve_k(
         n_assets=asset_matrix.shape[0],
@@ -60,11 +91,30 @@ def cluster_labels_kmedoids_dtw(
     cache_dir: str | None = _DTW_CACHE_DIR,
 ) -> np.ndarray:
     """
-    Cluster assets with K-Medoids on a precomputed DTW distance matrix (CPU).
+    Cluster assets with KMedoids on a precomputed DTW distance matrix (CPU).
 
-    The DTW matrix is cached under *cache_dir* (default:
-    data/processed/dtw_cache/) keyed by (start_date, end_date, tickers),
-    so subsequent calls for the same window skip the expensive computation.
+    The DTW matrix is cached under cache_dir keyed by (start_date, end_date, tickers),
+    so subsequent calls for the same window skip the expensive recomputation.
+
+    Parameters
+    ----------
+    window_returns : pd.DataFrame
+        Daily returns matrix for the estimation window (T x N).
+    k_mode : str
+        Cluster-count selection mode. Currently only 'global' is supported.
+    global_k : int
+        Fixed number of clusters used when k_mode='global'.
+    random_state : int
+        Random seed for reproducible clustering.
+    dtw_n_jobs : int
+        Number of parallel jobs for DTW computation (-1 = all cores).
+    cache_dir : str | None
+        Directory for the DTW distance matrix cache. Set to None to disable caching.
+
+    Returns
+    -------
+    np.ndarray
+        One-dimensional array of cluster labels, one label per asset (length N).
     """
     asset_matrix = raw_return_representation(window_returns)
     n_clusters = resolve_k(

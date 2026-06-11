@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import sys
 
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/mplconfig_portfolio_robustness")
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/mplconfig_cluster_portfolio")
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -23,10 +23,34 @@ from src.clustering.pipeline import _make_dtw_cache_key
 from src.clustering.representations import raw_return_representation
 from src.clustering.selection import DEFAULT_K_CANDIDATES, select_non_overlapping_windows
 from src.data.load import load_returns_csv
-from src.paths import get_returns_path, get_clustering_dir, get_dtw_cache_dir, UNIVERSE_CHOICES
+from src.paths import (
+    get_returns_path,
+    get_clustering_k_selection_dir,
+    get_dtw_cache_dir,
+    UNIVERSE_CHOICES,
+)
 
 
-def _plot_metric_lines(results_df: pd.DataFrame, out_dir: Path, method: str, distance: str, metric: str) -> None:
+def _plot_metric_lines(
+    results_df: pd.DataFrame, out_dir: Path,
+    method: str, distance: str, metric: str,
+) -> None:
+    """Plot one metric against k for each selected window plus the average line.
+
+    Parameters
+    ----------
+    results_df : pd.DataFrame
+        Evaluation results with columns ``method``, ``distance``,
+        ``window_id``, ``k``, ``status``, and the metric column.
+    out_dir : Path
+        Directory where the PNG file is saved.
+    method : str
+        Clustering method identifier (e.g. ``"kmeans"``).
+    distance : str
+        Distance metric identifier (e.g. ``"euclidean"``).
+    metric : str
+        Column name of the metric to plot (e.g. ``"silhouette_score"``).
+    """
     subset = results_df[
         (results_df["method"] == method)
         & (results_df["distance"] == distance)
@@ -57,7 +81,23 @@ def _plot_metric_lines(results_df: pd.DataFrame, out_dir: Path, method: str, dis
     plt.close()
 
 
-def _plot_heatmap_silhouette(results_df: pd.DataFrame, out_dir: Path, method: str, distance: str) -> None:
+def _plot_heatmap_silhouette(
+    results_df: pd.DataFrame, out_dir: Path, method: str, distance: str
+) -> None:
+    """Plot a k-by-window heatmap of silhouette scores for one clustering setup.
+
+    Parameters
+    ----------
+    results_df : pd.DataFrame
+        Evaluation results with columns ``method``, ``distance``,
+        ``window_id``, ``k``, ``status``, and ``silhouette_score``.
+    out_dir : Path
+        Directory where the PNG heatmap is saved.
+    method : str
+        Clustering method identifier (e.g. ``"kmedoids"``).
+    distance : str
+        Distance metric identifier (e.g. ``"dtw"``).
+    """
     subset = results_df[
         (results_df["method"] == method)
         & (results_df["distance"] == distance)
@@ -96,12 +136,13 @@ def _plot_heatmap_silhouette(results_df: pd.DataFrame, out_dir: Path, method: st
 
 
 def main() -> None:
+    """Run clustering k-selection analysis and save CSV/PNG outputs."""
     parser = argparse.ArgumentParser(description="Analyze optimal k for clustering.")
     parser.add_argument("--universe", default="sp500", choices=UNIVERSE_CHOICES)
     args = parser.parse_args()
 
     returns_path = get_returns_path(args.universe)
-    out_root = get_clustering_dir(args.universe)
+    out_root = get_clustering_k_selection_dir(args.universe)
     plots_dir = out_root / "plots"
     out_root.mkdir(parents=True, exist_ok=True)
     plots_dir.mkdir(parents=True, exist_ok=True)
@@ -142,7 +183,9 @@ def main() -> None:
     has_tslearn = importlib.util.find_spec("tslearn") is not None
 
     rows: list[dict] = []
-    for w, cfg, k, asset_matrix, cache_key in tqdm(tasks, desc="Evaluating clustering configs", unit="cfg"):
+    for w, cfg, k, asset_matrix, cache_key in tqdm(
+        tasks, desc="Evaluating clustering configs", unit="cfg"
+    ):
         if cfg["method"] == "kmedoids" and cfg["distance"] == "dtw" and not has_tslearn:
             rows.append(
                 {

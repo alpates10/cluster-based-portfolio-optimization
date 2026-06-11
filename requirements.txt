@@ -1,0 +1,11 @@
+matplotlib>=3.7.0
+numpy>=1.24.0
+openpyxl>=3.1.0
+packaging>=23.0
+pandas>=2.0.0
+pyportfolioopt>=1.5.0
+scikit-learn>=1.2.0
+scikit-learn-extra>=0.3.0
+scipy>=1.13.1
+tqdm>=4.65.0
+tslearn>=0.6.0

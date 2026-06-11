@@ -15,7 +15,28 @@ def resolve_k(
     global_k: int = 5,
 ) -> int:
     """
-    Resolve number of clusters.
+    Resolve the number of clusters to use.
+
+    Parameters
+    ----------
+    n_assets : int
+        Number of assets; the resolved cluster count cannot exceed this value.
+    mode : str
+        Cluster-count selection mode. Currently only 'global' is supported.
+    global_k : int
+        Fixed cluster count used when mode='global'.
+
+    Returns
+    -------
+    int
+        Cluster count to use.
+
+    Raises
+    ------
+    ValueError
+        If n_assets <= 0 or global_k < 1.
+    NotImplementedError
+        If mode is anything other than 'global'.
     """
     if n_assets <= 0:
         raise ValueError("n_assets must be positive")
@@ -46,10 +67,31 @@ def select_non_overlapping_windows(
     n_windows: int = 5,
 ) -> pd.DataFrame:
     """
-    Select non-overlapping windows distributed across the full sample.
+    Select non-overlapping evaluation windows distributed evenly across the full sample.
 
-    The windows are chosen systematically by distributing the available slack
-    (n_obs - n_windows * window_length) across windows.
+    Windows are spaced systematically by distributing the available slack
+    (n_obs - n_windows * window_length) uniformly across the chosen positions.
+
+    Parameters
+    ----------
+    returns_index : pd.Index
+        Full date index of the returns series.
+    window_length : int
+        Number of observations in each window.
+    n_windows : int
+        Number of non-overlapping windows to select.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per window with columns 'window_id', 'start_iloc', 'end_iloc',
+        'start_date', 'end_date', and 'n_obs'.
+
+    Raises
+    ------
+    ValueError
+        If n_windows < 1, window_length < 1, or there are not enough
+        observations to fit all requested windows.
     """
     n_obs = len(returns_index)
     if n_windows < 1:

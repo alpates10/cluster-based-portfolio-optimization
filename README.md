@@ -76,11 +76,15 @@ data/
 │   ├── nifty50_stocks/
 │   └── sse_stocks/
 └── processed/
-    ├── sp500/               # returns_final.csv + backtests/<strategy>/
+    ├── sp500/
+    │   ├── returns_final.csv
+    │   ├── backtests/<strategy>/
+    │   ├── clustering_k_selection/    # k-selection diagnostics and recommended_k.csv
+    │   ├── clustering_visualization/  # MDS and silhouette visualisation plots
+    │   └── dtw_cache/                 # SHA-256 hash-keyed DTW matrix cache (.npy)
     ├── bist100/
     ├── nifty50/
-    ├── sse/
-    └── dtw_cache/           # SHA-256 hash-keyed DTW matrix cache (.npy)
+    └── sse/
 ```
 
 ---
@@ -195,26 +199,26 @@ Available universes: `sp500` · `bist100` · `nifty50` · `sse`
 
 Reports are saved to `data/processed/<universe>/backtests/summary/`.
 
-### 6. Run permutation tests (optional)
+### 5. Run permutation tests (optional)
 
 ```bash
 python scripts/run_permutation_backtest.py --universe sp500 --method both --n_seeds 5
 python scripts/run_permutation_backtest.py --universe sp500 --method kmeans --n_seeds 10 --k_values 3 5 10
 ```
 
-### 7. Generate permutation summary (optional)
+### 6. Generate permutation summary (optional)
 
 ```bash
 python scripts/make_permutation_summary.py --universe sp500 --method both
 ```
 
-### 8. Generate clustering plots (optional)
+### 7. Generate clustering plots (optional)
 
 ```bash
 python scripts/make_clustering_plots.py --universe sp500
 ```
 
-### 9. Analyze optimal k (optional)
+### 8. Analyze optimal k (optional)
 
 ```bash
 python scripts/analyze_clustering_k.py --universe sp500

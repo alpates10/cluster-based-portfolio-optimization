@@ -65,14 +65,64 @@ _METHOD_PREFIX = {
 
 
 def _strategy_name(method: str, k: int, seed: int) -> str:
+    """Return the canonical permutation strategy name.
+
+    Parameters
+    ----------
+    method : str
+        Clustering method, either ``"kmeans"`` or ``"kmedoids"``.
+    k : int
+        Number of clusters.
+    seed : int
+        Random seed used for label permutation.
+
+    Returns
+    -------
+    str
+        Strategy name string, e.g.
+        ``"kmeans_ew_inter_markowitz_intra_k5_seed0003"``.
+    """
     return f"{_METHOD_PREFIX[method]}_k{k}_seed{seed:04d}"
 
 
 def _output_dir(method: str, k: int, seed: int, perm_root: Path = PERM_ROOT) -> Path:
+    """Return the output directory for one permutation strategy.
+
+    Parameters
+    ----------
+    method : str
+        Clustering method, either ``"kmeans"`` or ``"kmedoids"``.
+    k : int
+        Number of clusters.
+    seed : int
+        Random seed used for label permutation.
+    perm_root : Path, optional
+        Root directory for permutation backtest outputs.
+
+    Returns
+    -------
+    Path
+        Directory path ``<perm_root>/<strategy_name>/``.
+    """
     return perm_root / _strategy_name(method, k, seed)
 
 
 def _already_done(out_dir: Path, name: str) -> bool:
+    """Return True if all expected permutation output files already exist.
+
+    Parameters
+    ----------
+    out_dir : Path
+        Output directory for this (method, k, seed) combination.
+    name : str
+        Canonical strategy name used to construct expected file names.
+
+    Returns
+    -------
+    bool
+        ``True`` if all three CSVs (weights, daily returns, monthly
+        returns) are present in ``out_dir``.
+    """
     required = [
         f"{name}_weights.csv",
         f"{name}_daily_portfolio_returns.csv",
@@ -88,6 +138,21 @@ def _run_one(
     seed: int,
     perm_root: Path = PERM_ROOT,
 ) -> None:
+    """Run one permutation backtest and save daily, monthly, and weight CSVs.
+
+    Parameters
+    ----------
+    returns : pd.DataFrame
+        Full daily return matrix for the universe.
+    method : str
+        Clustering method, either ``"kmeans"`` or ``"kmedoids"``.
+    k : int
+        Number of clusters.
+    seed : int
+        Random seed for the label-permutation RNG.
+    perm_root : Path, optional
+        Root directory where per-strategy output folders are created.
+    """
     name    = _strategy_name(method, k, seed)
     out_dir = _output_dir(method, k, seed, perm_root)
 
@@ -135,6 +200,7 @@ def _run_one(
 
 
 def main() -> None:
+    """Parse CLI arguments and run all requested permutation backtests."""
     parser = argparse.ArgumentParser(description="Run permutation (random-baseline) backtests.")
     parser.add_argument(
         "--method",

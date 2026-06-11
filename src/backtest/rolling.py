@@ -4,9 +4,24 @@ from tqdm.auto import tqdm
 import threading
 import time
 
-# Generate monthly rebalance dates
-def get_monthly_rebalance_dates(returns: pd.DataFrame, estimation_window: int) -> list[pd.Timestamp]:
+def get_monthly_rebalance_dates(
+    returns: pd.DataFrame, estimation_window: int
+) -> list[pd.Timestamp]:
+    """
+    Return the first available trading day of each month after the estimation window.
 
+    Parameters
+    ----------
+    returns : pd.DataFrame
+        Daily returns matrix indexed by trading date.
+    estimation_window : int
+        Number of past trading days reserved for estimation before the first rebalance.
+
+    Returns
+    -------
+    list[pd.Timestamp]
+        Monthly rebalance dates.
+    """
     # Rebalance happens on the first available trading day of each month
     if len(returns) <= estimation_window:
         raise ValueError("Not enough data for the chosen estimation window")
@@ -106,6 +121,7 @@ def run_rolling_backtest(
             stop_event = threading.Event()
 
             def _heartbeat() -> None:
+                """Print periodic progress messages while a strategy call is running."""
                 while not stop_event.wait(heartbeat_seconds):
                     elapsed = time.perf_counter() - strategy_start
                     tqdm.write(
@@ -141,7 +157,10 @@ def run_rolling_backtest(
             weights = result
 
         if not isinstance(weights, pd.Series):
-            raise TypeError("strategy_func must return a pandas Series (or a tuple whose first element is a Series)")
+            raise TypeError(
+                "strategy_func must return a pandas Series "
+                "(or a tuple whose first element is a Series)"
+            )
 
         # weights should be aligned with returns columns
         weights = weights.reindex(returns.columns)

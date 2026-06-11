@@ -91,7 +91,13 @@ def _strategy_out_dir(base_out_dir: Path, strategy_name: str) -> Path:
 
 
 def _rename_old_folders(base_out_dir: Path) -> None:
-    """Rename legacy cluster strategy folders to <name>_old."""
+    """Rename legacy cluster strategy folders to <name>_old.
+
+    Parameters
+    ----------
+    base_out_dir : Path
+        Root backtests output directory to scan for legacy folder names.
+    """
     legacy = [
         "cluster_kmeans_equal_weight",
         "cluster_kmedoids_dtw_equal_weight",
@@ -108,6 +114,26 @@ def _rename_old_folders(base_out_dir: Path) -> None:
 
 
 def _build_strategies(mode: str, dtw_cache: str, k_values: list, k_max: int) -> dict:
+    """Build the strategy-name to callable mapping for the requested run mode.
+
+    Parameters
+    ----------
+    mode : str
+        Run mode controlling which strategy families are included
+        (e.g. ``"classical"``, ``"kmeans"``, ``"all"``).
+    dtw_cache : str
+        Path to the DTW distance-matrix cache directory.
+    k_values : list
+        List of k values to instantiate for fixed-k strategies.
+    k_max : int
+        Upper bound on k for adaptive strategies (typically ``n_assets - 1``).
+
+    Returns
+    -------
+    dict
+        Mapping from strategy name (``str``) to a zero-argument callable
+        (or ``partial``) that accepts ``window_returns`` and returns weights.
+    """
     strategies: dict = {}
 
     if mode in ("classical", "all"):
@@ -151,12 +177,20 @@ def _build_strategies(mode: str, dtw_cache: str, k_values: list, k_max: int) -> 
     _KMEANS_MARKOWITZ_FUNCS = {
         "kmeans_markowitz_inter_ew_intra":       get_cluster_kmeans_markowitz_inter_ew_intra,
         "kmeans_ew_inter_markowitz_intra":        get_cluster_kmeans_ew_inter_markowitz_intra,
-        "kmeans_markowitz_inter_markowitz_intra": get_cluster_kmeans_markowitz_inter_markowitz_intra,
+        "kmeans_markowitz_inter_markowitz_intra": (
+            get_cluster_kmeans_markowitz_inter_markowitz_intra
+        ),
     }
     _KMEDOIDS_MARKOWITZ_FUNCS = {
-        "kmedoids_dtw_markowitz_inter_ew_intra":       get_cluster_kmedoids_dtw_markowitz_inter_ew_intra,
-        "kmedoids_dtw_ew_inter_markowitz_intra":        get_cluster_kmedoids_dtw_ew_inter_markowitz_intra,
-        "kmedoids_dtw_markowitz_inter_markowitz_intra": get_cluster_kmedoids_dtw_markowitz_inter_markowitz_intra,
+        "kmedoids_dtw_markowitz_inter_ew_intra": (
+            get_cluster_kmedoids_dtw_markowitz_inter_ew_intra
+        ),
+        "kmedoids_dtw_ew_inter_markowitz_intra": (
+            get_cluster_kmedoids_dtw_ew_inter_markowitz_intra
+        ),
+        "kmedoids_dtw_markowitz_inter_markowitz_intra": (
+            get_cluster_kmedoids_dtw_markowitz_inter_markowitz_intra
+        ),
     }
 
     if mode in ("kmeans_markowitz", "all"):
@@ -175,32 +209,62 @@ def _build_strategies(mode: str, dtw_cache: str, k_values: list, k_max: int) -> 
     # ── Adaptive Markowitz strategies ─────────────────────────────────────────
     if mode in ("adaptive_markowitz", "all"):
         strategies["kmeans_adaptive_markowitz_inter_ew_intra"] = partial(
-            get_cluster_kmeans_adaptive_markowitz_inter_ew_intra, random_state=42, k_max=k_max
+            get_cluster_kmeans_adaptive_markowitz_inter_ew_intra,
+            random_state=42,
+            k_max=k_max
         )
         strategies["kmeans_adaptive_ew_inter_markowitz_intra"] = partial(
-            get_cluster_kmeans_adaptive_ew_inter_markowitz_intra, random_state=42, k_max=k_max
+            get_cluster_kmeans_adaptive_ew_inter_markowitz_intra,
+            random_state=42,
+            k_max=k_max
         )
         strategies["kmeans_adaptive_markowitz_inter_markowitz_intra"] = partial(
-            get_cluster_kmeans_adaptive_markowitz_inter_markowitz_intra, random_state=42, k_max=k_max
+            get_cluster_kmeans_adaptive_markowitz_inter_markowitz_intra,
+            random_state=42,
+            k_max=k_max,
         )
         strategies["kmedoids_dtw_adaptive_markowitz_inter_ew_intra"] = partial(
             get_cluster_kmedoids_dtw_adaptive_markowitz_inter_ew_intra,
-            random_state=42, dtw_n_jobs=-1, dtw_cache_dir=dtw_cache, k_max=k_max,
+            random_state=42,
+            dtw_n_jobs=-1,
+            dtw_cache_dir=dtw_cache,
+            k_max=k_max,
         )
         strategies["kmedoids_dtw_adaptive_ew_inter_markowitz_intra"] = partial(
             get_cluster_kmedoids_dtw_adaptive_ew_inter_markowitz_intra,
-            random_state=42, dtw_n_jobs=-1, dtw_cache_dir=dtw_cache, k_max=k_max,
+            random_state=42,
+            dtw_n_jobs=-1,
+            dtw_cache_dir=dtw_cache,
+            k_max=k_max,
         )
         strategies["kmedoids_dtw_adaptive_markowitz_inter_markowitz_intra"] = partial(
             get_cluster_kmedoids_dtw_adaptive_markowitz_inter_markowitz_intra,
-            random_state=42, dtw_n_jobs=-1, dtw_cache_dir=dtw_cache, k_max=k_max,
+            random_state=42,
+            dtw_n_jobs=-1,
+            dtw_cache_dir=dtw_cache,
+            k_max=k_max,
         )
 
     return strategies
 
 
 def _already_done(base_out_dir: Path, strategy_name: str) -> bool:
-    """Return True if all required output files exist for this strategy."""
+    """Return True if all required output files exist for this strategy.
+
+    Parameters
+    ----------
+    base_out_dir : Path
+        Root backtests output directory.
+    strategy_name : str
+        Canonical name of the strategy (used to locate its output folder
+        and to construct expected file names).
+
+    Returns
+    -------
+    bool
+        ``True`` if every required CSV (daily returns, monthly returns,
+        weights, and optionally selected_k) is present on disk.
+    """
     out_dir = _strategy_out_dir(base_out_dir, strategy_name)
     required_suffixes = ["daily_portfolio_returns", "monthly_portfolio_returns", "weights"]
     if strategy_name in _ADAPTIVE_STRATEGY_NAMES:
@@ -212,6 +276,7 @@ def _already_done(base_out_dir: Path, strategy_name: str) -> bool:
 
 
 def main():
+    """Parse CLI arguments and run rolling backtests for selected strategies."""
     parser = argparse.ArgumentParser(description="Run rolling backtests.")
     parser.add_argument(
         "--mode",
